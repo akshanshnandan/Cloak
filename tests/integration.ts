@@ -145,5 +145,5 @@ try {
   console.log('PASS real transformations:', JSON.stringify(report, null, 2));
 } finally {
   app.planner.close(); await app.browser.close(); await new Promise<void>(resolve => app.server.close(() => resolve()));
-  if (path.resolve(directory).startsWith(work + path.sep)) await rm(directory, { recursive: true, force: true });
+  if (path.resolve(directory).startsWith(work + path.sep)) await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
 }

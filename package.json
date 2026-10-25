@@ -1,6 +1,6 @@
 {
   "name": "cloak-personal-internet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "An open-source, local AI layer that personalizes real websites.",
@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx tests/integration.ts",
+    "test:journeys": "tsx tests/journeys.ts",
     "setup": "playwright install chromium",
     "warmup": "tsx src/warmup.ts"
   },

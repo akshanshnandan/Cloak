@@ -31,8 +31,14 @@ export class BrowserManager {
       this.context = context;
       await context.exposeBinding('cloakAction', async ({ page, frame }, action) => {
         if (frame !== page.mainFrame() || !BrowserManager.supported(page.url())) throw new Error('This page is not an Apple page');
-        if (page !== this.page) await this.read(page);
+        if (page !== this.page) await this.activate(page);
         await this.onAction(action);
+      });
+      await context.exposeBinding('cloakActivate', async ({ page, frame }) => {
+        if (frame === page.mainFrame() && BrowserManager.supported(page.url()) && page !== this.page) await this.activate(page);
+      });
+      await context.addInitScript(() => {
+        window.addEventListener('focus', () => { void (window as any).cloakActivate?.().catch(() => {}); });
       });
       context.on('page', page => this.attach(page));
       context.on('close', () => { this.context = undefined; this.page = undefined; this.stories = []; this.inventory = undefined; this.url = ''; this.site = ''; this.changed(); });
@@ -48,7 +54,7 @@ export class BrowserManager {
       this.reading.delete(page);
       if (page === this.page) { this.inventory = undefined; this.stories = []; this.url = page.url(); this.navigationVersion++; this.changed(); }
     });
-    page.on('domcontentloaded', () => { void this.read(page).catch(error => console.error('Page extraction:', error.message)); });
+    page.on('domcontentloaded', () => { void this.read(page).catch(error => { if (!page.isClosed() && !/Execution context was destroyed|Target page, context or browser has been closed/.test(error.message)) console.error('Page extraction:', error.message); }); });
     page.on('close', () => {
       if (this.page === page) { this.page = undefined; this.stories = []; this.inventory = undefined; this.url = ''; this.site = ''; this.navigationVersion++; this.changed(); }
     });
@@ -74,6 +80,12 @@ export class BrowserManager {
     await this.read(page);
   }
   private reading = new WeakMap<Page, { url: string; promise: Promise<void>; pending: boolean }>();
+  private async activate(page: Page) {
+    const inventory = await page.evaluate(() => (window as any).__cloak?.inventory) as PageInventory | undefined;
+    if (!inventory || inventory.url !== page.url()) { await this.read(page); return; }
+    this.page = page; this.inventory = inventory; this.stories = inventory.items; this.url = page.url(); this.site = await page.title(); this.navigationVersion++;
+    this.changed(); void this.onExtract();
+  }
   read(page: Page): Promise<void> {
     const url = page.url();
     const existing = this.reading.get(page);
@@ -91,10 +103,11 @@ export class BrowserManager {
     }
     this.page = page;
     const version = ++this.navigationVersion;
+    this.inventory = undefined; this.stories = []; this.url = url; this.changed();
     // tsx names nested functions using __name; supply the helper in the page realm.
     await page.evaluate(() => { (window as any).__name = (value: unknown) => value; });
     if (url.includes('apple.com')) {
-      const isStore = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?store\/?$/.test(new URL(url).pathname);
+      const isStore = /^\/(?:[a-z]{2}(?:-[a-z]{2,3})?\/)?store\/?$/.test(new URL(url).pathname);
       await page.waitForSelector('main,[role="main"],.main', { timeout: 15000 });
       if (isStore) await page.waitForFunction(() => {
         const items = Array.from(document.querySelectorAll('.rf-cards-scroller-itemview'));
@@ -123,13 +136,14 @@ export class BrowserManager {
     await this.onExtract();
   }
   async update() {
-    const page = this.page;
-    if (!page || page.isClosed() || !BrowserManager.supported(page.url())) return;
-    try { await page.evaluate(state => (window as any).__cloak?.update(state), this.getState()); }
-    catch (error) {
-      const message = (error as Error).message;
-      if (!page.isClosed() && !/Execution context was destroyed|Cannot find context|Target page, context or browser has been closed/.test(message)) console.error('Page update:', message);
-    }
+    const state = this.getState();
+    await Promise.all((this.context?.pages() || []).filter(page => !page.isClosed() && BrowserManager.supported(page.url())).map(async page => {
+      try { await page.evaluate(state => (window as any).__cloak?.update(state), state); }
+      catch (error) {
+        const message = (error as Error).message;
+        if (!page.isClosed() && !/Execution context was destroyed|Cannot find context|Target page, context or browser has been closed/.test(message)) console.error('Page update:', message);
+      }
+    }));
   }
   async focus() { if (this.page && !this.page.isClosed()) await this.page.bringToFront(); }
   async find(id: string) {

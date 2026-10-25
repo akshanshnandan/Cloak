@@ -79,8 +79,8 @@ export class LlamaRuntime {
     }
     this.close(); throw new Error('Local AI startup timed out');
   }
-  async generate(messages: { role: string; content: string }[], schema: unknown): Promise<string> {
-    const response = await fetch(this.base + '/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` }, body: JSON.stringify({ messages, temperature: 0, max_tokens: 320, chat_template_kwargs: { enable_thinking: false }, response_format: { type: 'json_object', schema }, cache_prompt: true }), signal: AbortSignal.timeout(90000) });
+  async generate(messages: { role: string; content: string }[], schema: unknown, signal?: AbortSignal): Promise<string> {
+    const response = await fetch(this.base + '/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` }, body: JSON.stringify({ messages, temperature: 0, max_tokens: 320, chat_template_kwargs: { enable_thinking: false }, response_format: { type: 'json_object', schema }, cache_prompt: true }), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(90000)]) : AbortSignal.timeout(90000) });
     const result = await response.json() as any;
     if (!response.ok) throw new Error(result.error?.message || 'Local AI inference failed');
     return result.choices?.[0]?.message?.content || '';

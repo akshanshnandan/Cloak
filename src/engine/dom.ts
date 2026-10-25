@@ -13,6 +13,15 @@ export function installDomEngine() {
   const hidden = new Map<HTMLElement, boolean>();
   const disclosures: HTMLElement[] = [];
   let savedWindow = { x: 0, y: 0 }, active = false;
+  // Apple's classic lazy loader caches download ranges before sections move.
+  // Release only its transparent blocking source near the new viewport. All
+  // responsive sources, images and native load handlers stay exactly Apple's.
+  const media = new IntersectionObserver(entries => {
+    if (!active) return;
+    entries.filter(entry => entry.isIntersecting).forEach(entry => {
+      entry.target.querySelectorAll('source[data-empty]').forEach(source => source.remove());
+    });
+  }, { rootMargin: '1000px' });
   function register(id: string, entries: { id: string; node: HTMLElement }[]) {
     if (!entries.length || groups.has(id)) return;
     const parent = entries[0].node.parentNode;
@@ -101,6 +110,7 @@ export function installDomEngine() {
   }
   function restore(positions = true) {
     expectedLabels.clear();
+    media.disconnect();
     clearPresentation();
     // Parent lists first, followed by their native item lists.
     for (const [id, group] of groups) if (group.nodes.every(node => node.isConnected) && group.slots.every(slot => slot.isConnected)) reorder(id, group.ids);
@@ -122,9 +132,10 @@ export function installDomEngine() {
     try {
       operations.forEach(op => reorder(op.group, op.order));
       labels.forEach(label => { expectedLabels.set(label.id, label.text); target(texts.get(label.id)!).textContent = label.text; });
+      document.querySelectorAll('picture[data-lazy]').forEach(picture => media.observe(picture));
     } catch (error) { restore(); throw error; }
   }
   win.__cloakDom = { register, registerText, registerPager, capture, apply, restore, present,
-    destroy: () => { restore(); abort.abort(); observers.forEach(observer => observer.disconnect()); },
+    destroy: () => { restore(); media.disconnect(); abort.abort(); observers.forEach(observer => observer.disconnect()); },
     diagnostics: () => Object.fromEntries([...groups].map(([id, group]) => [id, group.ids.map((id, i) => ({ id, connected: group.nodes[i].isConnected, slot: group.slots[i].isConnected }))])) };
 }

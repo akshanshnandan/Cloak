@@ -63,7 +63,7 @@ export function installAppleCloak() {
     reset(); requestAnimationFrame(() => requestAnimationFrame(reset));
   }
   function find(id: string) { const entry = items.find(item => item.id === id); entry?.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); }
-  win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find, stale: () => sections.some(section => !section.node.isConnected),
+  win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find, stale: () => sections.some(section => !section.node.isConnected) || nativeSections.reduce((count, node) => count + node.querySelectorAll('.rf-cards-scroller-itemview').length, 0) !== items.length || document.querySelectorAll('.rs-cardsshelf .rs-cards-shelf-mainheader').length !== sections.length,
     diagnostics: () => ({ planId: currentPlan, sections: physicalOrder(sections), categories: physicalOrder(categories), itemOrders: Object.fromEntries(sections.map(section => [section.id, physicalOrder(items.filter(item => item.story.sectionId === section.id))])), connected: items.every(item => item.node.isConnected), engine: engine.diagnostics() }) };
   document.addEventListener('click', event => {
     if (!active || event.composedPath().some(node => node instanceof HTMLElement && node.id === 'cloak-controls')) return;

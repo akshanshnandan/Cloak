@@ -58,7 +58,11 @@ export class LocalPlanner {
       }};
       let lastError: Error | undefined;
       for (let attempt = 0; attempt < 2; attempt++) {
-        const raw = await this.runtime.generate(messages, schema);
+        if (!isCurrent()) throw new Error('Superseded page request');
+        const controller = new AbortController();
+        const timer = setInterval(() => { if (!isCurrent()) controller.abort(); }, 150);
+        let raw: string;
+        try { raw = await this.runtime.generate(messages, schema, controller.signal); } finally { clearInterval(timer); }
         try {
           const decision = parseDecision(raw, inventory);
           this.cache.set(key, decision);

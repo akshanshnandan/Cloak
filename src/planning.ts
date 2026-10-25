@@ -20,7 +20,7 @@ export function parseDecision(raw: string, inventory: PageInventory): IntentDeci
   return { title: decision.title, query: decision.query, budget: decision.budget, products, sections: indexes(decision.sections, inventory.sections.length, 'sections'), categories: indexes(decision.categories, inventory.categories.length, 'categories'), reading: decision.reading, density: decision.density };
 }
 
-export function compilePlan(decision: IntentDecision, inventory: PageInventory, ranked: RankedStory[], profile: Profile, source: PersonalizationPlan['source'], categoryScores: Record<string, number> = {}): PersonalizationPlan {
+export function compilePlan(decision: IntentDecision, inventory: PageInventory, ranked: RankedStory[], profile: Profile, source: PersonalizationPlan['source'], categoryScores: Record<string, number> = {}, sectionScores: Record<string, number> = {}): PersonalizationPlan {
   const budget = profile.budget ?? decision.budget;
   const eligible = (id: string) => { const item = inventory.items.find(i => i.id === id)!; return !budget || item.price == null || item.price <= budget; };
   const contentPage = inventory.mode === 'content' || inventory.mode === 'transaction';
@@ -34,7 +34,12 @@ export function compilePlan(decision: IntentDecision, inventory: PageInventory, 
   const primaryOrder = completeOrder([...prioritized.filter(item => item.kind === 'product' && eligible(item.id)).map(item => item.id), ...prioritized.map(item => item.id)], primaryIds);
   const contentScore = (item: RankedStory) => item.score + (selected.includes(item.id) ? .24 : 0) - (eligible(item.id) ? 0 : .8);
   const itemOrders = Object.fromEntries(inventory.sections.map(section => [section.id, !contentPage && section.id === inventory.primarySectionId ? primaryOrder : completeOrder([...ranked.filter(item => section.itemIds.includes(item.id))].sort((a, b) => contentScore(b) - contentScore(a)).map(item => item.id), section.itemIds)]));
-  const sectionOrder = completeOrder([...(contentPage ? [] : [inventory.primarySectionId]), ...decision.sections.map(i => inventory.sections[i].id)], inventory.sections.map(s => s.id));
+  const modelSections = completeOrder(decision.sections.map(i => inventory.sections[i].id), inventory.sections.map(s => s.id));
+  const prioritizedSections = [...modelSections].sort((a, b) => {
+    const score = (id: string) => (sectionScores[id] || 0) + .12 * (1 - modelSections.indexOf(id) / Math.max(1, modelSections.length));
+    return score(b) - score(a);
+  });
+  const sectionOrder = completeOrder([...(contentPage ? [] : [inventory.primarySectionId]), ...prioritizedSections], inventory.sections.map(s => s.id));
   const modelCategories = completeOrder(decision.categories.map(i => inventory.categories[i].id), inventory.categories.map(c => c.id));
   const normalize = (text: string) => text.toLowerCase().replace(/apple|[^a-z0-9]/g, '');
   const affinity = (id: string) => {

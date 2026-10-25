@@ -45,11 +45,11 @@ async function rerank() {
       // Embeddings provide an immediate local rearrangement while Qwen reasons
       // about the actual page. The final plan retains explicit model provenance.
       if (!plan || plan.profileId !== profile.id || plan.inventoryKey !== inventoryKey(inventory)) {
-        const sectionRanking = await rankStories(model, inventory.sections.map(section => ({ ...section, url: inventory.url })), profile);
+        const sectionRanking = await rankStories(model, inventory.sections.map(section => ({ ...section, description: section.description + ' ' + section.itemIds.map(id => stories.find(item => item.id === id)?.title).join('. '), url: inventory.url })), profile);
         const categoryRanking = await rankStories(model, inventory.categories.map(category => ({ ...category, description: category.title })), profile);
         if (current !== revision) return;
         const preview = { title: 'Selected for you', query: profile.description, budget: profile.budget || null, products: result.slice(0, 4).map(item => stories.findIndex(story => story.id === item.id)), sections: sectionRanking.map(section => inventory.sections.findIndex(s => s.id === section.id)), categories: categoryRanking.map(category => inventory.categories.findIndex(c => c.id === category.id)) };
-        plan = compilePlan(preview, inventory, result, profile, { model: MODEL, generatedAt: new Date().toISOString(), cached: false }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])));
+        plan = compilePlan(preview, inventory, result, profile, { model: MODEL, generatedAt: new Date().toISOString(), cached: false }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])), Object.fromEntries(sectionRanking.map(section => [section.id, section.score])));
         ranked = result; broadcast();
       }
       const inference = await planner.decide(inventory, profile, result.map(item => item.id), () => current === revision);
@@ -62,7 +62,8 @@ async function rerank() {
         return { ...category, description: relevant.map(item => item.title).join('. ').slice(0, 700) };
       });
       const categoryRanking = await rankStories(model, categories, understood);
-      nextPlan = compilePlan(inference.decision, inventory, result, profile, { model: PLANNER_MODEL, generatedAt: inference.generatedAt, cached: inference.cached }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])));
+      const sectionRanking = await rankStories(model, inventory.sections.map(section => ({ ...section, description: section.description + ' ' + section.itemIds.map(id => { const item = stories.find(item => item.id === id); return item ? item.title + '. ' + item.description.slice(0, 100) : ''; }).join('. ').slice(0, 1100), url: inventory.url })), understood);
+      nextPlan = compilePlan(inference.decision, inventory, result, profile, { model: PLANNER_MODEL, generatedAt: inference.generatedAt, cached: inference.cached }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])), Object.fromEntries(sectionRanking.map(section => [section.id, section.score])));
       const top = nextPlan.collection.itemIds;
       result.sort((a, b) => { const x = top.indexOf(a.id), y = top.indexOf(b.id); return (x < 0 ? 1000 : x) - (y < 0 ? 1000 : y) || b.score - a.score; });
     }

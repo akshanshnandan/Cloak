@@ -2,7 +2,7 @@
 
 **A real website, organized around you.**
 
-Cloak uses a local, open-weight language model to reorganize the real Apple Store. It moves Apple’s existing sections, product cards and category navigation into a personalized hierarchy. Products, images, prices, typography and links remain Apple’s own.
+Cloak uses a local, open-weight language model to personalize the real Apple website as you browse. It discovers and reorders Apple’s existing sections, feature cards, product lineups and navigation around your needs, across the Store, home page, product families, product details and Support. Products, images, prices, typography and links remain Apple’s own.
 
 Start with **Original**. Click **Cloaked**. Switch back instantly.
 
@@ -30,34 +30,37 @@ The first start downloads a pinned llama.cpp runtime and **Qwen3-1.7B Q4_K_M** w
 npm run warmup
 ```
 
-New needs require local inference. Matching plans are cached, making repeat profile switches fast. Keep the terminal open while using Cloak.
+An immediate local semantic pass rearranges the page while Qwen finishes its deeper pass. New needs require local inference. Matching plans are cached, making repeat profile switches fast. Keep the terminal open while using Cloak.
 
-## Try two different people
+## Try different people
 
 1. Open Apple in Original mode.
 2. Select **Engineering student**, then **Cloaked**. The curated product shelf favors an affordable study setup. Verified education and refurbished content moves closer to the top. The default maximum is $1,400 per product.
-3. Select **Creative professional**. Product order and the section hierarchy change around editing, illustration and professional performance. The default maximum is $4,000.
-4. Open preferences and describe different needs in your own words. Change the budget and click **Apply**.
-5. Use **+ / −** under Fine-tune to influence future ordering.
-6. Click **Original**. Native section order, card order, category order, headings and saved scroll positions are restored.
+3. Select **Grandma** for family calls, easy setup and help, with larger reading text and fewer choices at once. Follow native links to iPhone, Mac, product details or Support: the same preferences continue there. Use **Show more** to reveal the remaining native choices.
+4. Select **Creative professional**. Product order and the section hierarchy change around editing, illustration and professional performance. The default maximum is $4,000.
+5. Open preferences and describe different needs in your own words. Change the budget and click **Apply**.
+6. Use **+ / −** under Fine-tune to influence future ordering.
+7. Click **Original**. Native section order, card order, category order, headings and saved scroll positions are restored.
 
-There are no fixed layouts for individual profiles. Both use the same inventory, local model, plan compiler and DOM engine.
+You can create and name a profile, describe your own needs, set a budget, and override automatic reading size and choice density. There are no fixed layouts for individual profiles. All use the same inventory, local model, plan compiler and DOM engine.
 
 ## How it works
 
 ```text
-Real apple.com/store in Playwright
+Real Apple pages in Playwright
   → inventory of sections, categories, product cards, prices and links
   → local Qwen3: interpret needs and generate schema-constrained decisions
   → MiniLM: semantic ranking and feedback weighting
-  → validated plan: section order, card orders, navigation order, collection
+  → validated plan: section order, card orders, navigation order, collection, reading preferences
   → transactional DOM engine: move existing native nodes
   → Original: restore the recorded layout
 ```
 
 **The model decides; the engine constrains.** Qwen produces a short collection title, an intended use, a budget and ordered IDs from the actual page. It cannot output executable code or arbitrary CSS. The compiler validates IDs, applies verified price limits, combines semantic relevance with explicit feedback, and retains all existing content.
 
-The primary native product shelf becomes the personalized collection. Other native sections move higher or lower. Cards within each shelf and the product category navigation are reordered. Less relevant content remains available further down the page or carousel.
+On the Store, the primary native product shelf becomes the personalized collection. Other native sections move higher or lower. Cards within each shelf and the product category navigation are reordered. Less relevant content remains available further down the page or carousel.
+
+On other Apple pages, a discovery adapter registers safe sibling sections, card lists and chapter/global navigation. Hero navigation, procedural steps, tab relationships and purchase options retain their native structure. Larger text is applied only to body copy when requested. Focused browsing keeps the first four eligible choices visible, with a reversible inline disclosure for the rest.
 
 The DOM engine records positions using nonvisual anchors and moves whole native carousel items. It preserves node identity, event handlers, product copy and imagery. While Cloaked, native carousel buttons page through the new DOM order on the original scroll surface. Original mode restores the previous behavior and recorded layout.
 
@@ -70,9 +73,12 @@ npm run dev
 npm run typecheck
 npm test
 npm run test:integration
+npm run test:journeys
 ```
 
 Unit tests cover plan validation, budget enforcement, atomic DOM changes, exact restoration, persistence and host restrictions. Integration tests use the real Apple Store and local model to verify that native section, category and card orders actually change between profiles; they also exercise native pagination, product links, feedback, natural-language refinement, undo, responsive controls and accessibility.
+
+`npm run test:journeys` exercises six live Apple page families with student and grandmother profiles, physical DOM orders, exact order restoration, disclosure, reading size, native links, back/history navigation, multiple tabs, controls accessibility and purchase configurators. It also warms matching local plans for the demonstration.
 
 `npm run dashboard` opens the optional development control surface at `http://127.0.0.1:4317`. It is not the Apple experience. `/api/state` exposes the current plan and its model provenance for debugging.
 
@@ -95,6 +101,6 @@ The controls use a compact Original/Cloaked switch and a preferences popover. Th
 
 ## Scope and license
 
-The demonstration supports the tested Apple Store structure. Following a product link opens the unmodified Apple product page. Changes to Apple’s markup may require an adapter update. The previous Hacker News adapter remains as a development fallback.
+Cloak attaches automatically on HTTPS `apple.com`, `www.apple.com` and `support.apple.com`, including localized paths. It rediscovers content after document/history navigation, new tabs and replacement of registered content. Tested journeys cover the Store, Apple home page, Mac, iPhone, MacBook Air, Support and Accessibility. Discovery is conservative: pages without safe movable groups retain their native structure while preferences and requested reading adjustments remain available. Configurator, cart and checkout form ordering is preserved; account and payment hosts are outside the adapter. Apple’s future markup may require an adapter update. The previous Hacker News adapter remains as a development fallback.
 
 Cloak and llama.cpp are MIT licensed. [Qwen3](https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF) and [MiniLM](https://huggingface.co/Xenova/all-MiniLM-L6-v2) are Apache-2.0 licensed. Apple’s content and marks belong to Apple. This is an independent project.

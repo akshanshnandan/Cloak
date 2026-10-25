@@ -16,12 +16,15 @@ export function installAppleContent() {
   const title = (node: Element) => text(node.querySelector('h1,h2,h3,h4,[role="heading"]'), 120) || clean(node.querySelector('a')?.getAttribute('aria-label')) || clean(node.querySelector('img')?.getAttribute('alt')) || text(node, 100);
   const groups: { id: string; type: 'sections' | 'items' | 'categories'; ids: string[] }[] = [];
   const records = new Map<string, HTMLElement>();
+  const parentSnapshots: { parent: HTMLElement; tags: Set<string>; children: Element[] }[] = [];
   const items: any[] = [], sections: any[] = [], categories: any[] = [];
   const used = new Set<HTMLElement>();
   function register(id: string, type: 'sections' | 'items' | 'categories', entries: {id: string; node: HTMLElement}[]) {
     if (entries.length < 2) return;
     engine.register(id, entries); groups.push({ id, type, ids: entries.map(entry => entry.id) });
     entries.forEach(entry => records.set(entry.id, entry.node));
+    const parent = entries[0].node.parentElement!, tags = new Set(entries.map(entry => entry.node.tagName));
+    parentSnapshots.push({ parent, tags, children: Array.from(parent.children).filter(child => tags.has(child.tagName)) });
   }
   function story(node: HTMLElement, sectionId: string, suffix: string) {
     const link = node.querySelector<HTMLAnchorElement>('a[href]:not([href^="#"])');
@@ -97,6 +100,6 @@ export function installAppleContent() {
     window.dispatchEvent(new Event('resize'));
   }
   win.__cloakAdapter = { inventory, extract: () => items, apply, restore, find: (id: string) => records.get(id)?.scrollIntoView({ block: 'center', behavior: 'instant' }),
-    stale: () => groups.some(group => group.ids.some(id => !records.get(id)?.isConnected)),
+    stale: () => groups.some(group => group.ids.some(id => !records.get(id)?.isConnected)) || parentSnapshots.some(({ parent, tags, children }) => { const current = Array.from(parent.children).filter(child => tags.has(child.tagName) && !child.hasAttribute('data-cloak-disclosure')); return current.length !== children.length || current.some(child => !children.includes(child)); }),
     diagnostics: () => ({ planId: currentPlan, mode: inventory.mode, groups: Object.fromEntries(groups.map(group => [group.id, physical(group.ids)])), connected: [...records.values()].every(node => node.isConnected), engine: engine.diagnostics() }) };
 }
