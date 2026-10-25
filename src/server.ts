@@ -7,7 +7,9 @@ import { PreferenceStore } from './store.ts';
 import { SemanticModel, MODEL } from './model.ts';
 import { BrowserManager } from './browser.ts';
 import { rankStories } from './ranking.ts';
-import type { RankedStory } from './types.ts';
+import { LocalPlanner, PLANNER_MODEL } from './planner.ts';
+import { compilePlan, inventoryKey } from './planning.ts';
+import type { RankedStory, PersonalizationPlan } from './types.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT || 4317);
@@ -15,10 +17,13 @@ const store = new PreferenceStore(process.env.CLOAK_DATA_DIR || path.join(root, 
 await store.load();
 const clients = new Set<Response>();
 let ranked: RankedStory[] = [], busy = false, error = '', revision = 0;
+let plan: PersonalizationPlan | null = null;
 const model = new SemanticModel(path.join(root, '.cache/models'), () => broadcast());
+const planner = new LocalPlanner(path.join(root, '.cache'), () => broadcast());
 const browser = new BrowserManager(path.join(store.directory, 'browser'), state, action, rerank, broadcast);
 function state() {
-  return { ...store.value, model: model.status, modelName: MODEL, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
+  const currentPlan = plan && browser?.inventory && plan.inventoryKey === inventoryKey(browser.inventory) ? plan : null;
+  return { ...store.value, engineVersion: 2, model: model.status, modelName: MODEL, planner: planner.status, plannerName: PLANNER_MODEL, plan: currentPlan, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
 }
 function broadcast() {
   const data = `data: ${JSON.stringify(state())}\n\n`;
@@ -29,12 +34,30 @@ async function rerank() {
   const current = ++revision;
   const stories = [...browser.stories];
   const profile = structuredClone(store.active);
-  if (!stories.length) { ranked = []; busy = false; broadcast(); return; }
+  const inventory = browser.inventory ? structuredClone(browser.inventory) : null;
+  if (!stories.length) { ranked = []; plan = null; busy = false; broadcast(); return; }
   busy = true; error = ''; broadcast();
   try {
-    const result = await rankStories(model, stories, profile);
+    let result = await rankStories(model, stories, profile);
+    let nextPlan: PersonalizationPlan | null = null;
+    if (inventory) {
+      const inference = await planner.decide(inventory, profile, result.map(item => item.id));
+      if (current !== revision) return;
+      const understood = { ...profile, description: profile.description + '\n' + inference.decision.query };
+      result = await rankStories(model, stories, understood);
+      const categories = inventory.categories.map(category => {
+        const normalize = (text: string) => text.toLowerCase().replace(/apple|\s/g, '');
+        const relevant = stories.filter(item => normalize(item.title).includes(normalize(category.title)) || inventory.sections.some(section => normalize(section.title).replace(/\./g, '') === normalize(category.title) && section.id === item.sectionId));
+        return { ...category, description: relevant.map(item => item.title).join('. ').slice(0, 700) };
+      });
+      const categoryRanking = await rankStories(model, categories, understood);
+      nextPlan = compilePlan(inference.decision, inventory, result, profile, { model: PLANNER_MODEL, generatedAt: inference.generatedAt, cached: inference.cached }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])));
+      const top = nextPlan.collection.itemIds;
+      result.sort((a, b) => { const x = top.indexOf(a.id), y = top.indexOf(b.id); return (x < 0 ? 1000 : x) - (y < 0 ? 1000 : y) || b.score - a.score; });
+    }
     if (current !== revision) return;
     ranked = result;
+    plan = nextPlan;
   } catch (cause) { if (current === revision) error = (cause as Error).message; }
   finally { if (current === revision) { busy = false; broadcast(); } }
 }
@@ -59,7 +82,7 @@ async function performAction(payload: any) {
     case 'toggle': {
       if (typeof payload.enabled !== 'boolean') throw new Error('Invalid toggle');
       store.value.enabled = payload.enabled;
-      await store.save(); broadcast(); break;
+      await store.save(); broadcast(); if (payload.enabled && !state().plan && !busy) void rerank(); break;
     }
     case 'save-profile': {
       const profile = store.active;
@@ -67,7 +90,8 @@ async function performAction(payload: any) {
       if (!name || !description) throw new Error('Add a name and describe what matters to you');
       if (!Array.isArray(payload.interests) || payload.interests.length > 12) throw new Error('Use up to 12 interests');
       const interests = payload.interests.map((i: unknown) => text(i, 80, 'interest')).filter(Boolean);
-      Object.assign(profile, { name, description, avoid, interests });
+      if (payload.budget !== undefined && payload.budget !== null && (!Number.isFinite(payload.budget) || payload.budget < 1 || payload.budget > 1000000)) throw new Error('Enter a valid maximum budget');
+      Object.assign(profile, { name, description, avoid, interests, ...(payload.budget !== undefined ? { budget: payload.budget } : {}) });
       await store.save(); void rerank(); break;
     }
     case 'create-profile': {
@@ -93,7 +117,7 @@ async function performAction(payload: any) {
       if (!browser.stories.some(s => s.id === payload.id)) throw new Error('That item is no longer on this page');
       await browser.find(payload.id); break;
     }
-    case 'retry-model': await model.load(); await rerank(); break;
+    case 'retry-model': await model.load(); await planner.load(); await rerank(); break;
     default: throw new Error('Unknown action');
   }
 }
@@ -136,6 +160,7 @@ app.use((cause: Error, _req: express.Request, res: express.Response, _next: expr
 await mkdir(path.join(root, '.cache'), { recursive: true });
 const server = app.listen(port, '127.0.0.1', () => console.log(`\n  cloak · Your internet, tailored to you.\n  http://127.0.0.1:${port}\n`));
 void model.load().then(() => rerank()).catch(() => broadcast());
-async function shutdown() { clients.forEach(r => r.end()); await browser.close(); server.close(() => process.exit(0)); }
+void planner.load().catch(() => broadcast());
+async function shutdown() { clients.forEach(r => r.end()); planner.close(); await browser.close(); server.close(() => process.exit(0)); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
-export { browser, model, store, server, state };
+export { browser, model, planner, store, server, state };

@@ -18,20 +18,30 @@ export function parseDecision(raw: string, inventory: PageInventory): IntentDeci
   return { title: decision.title, query: decision.query, budget: decision.budget, products, sections: indexes(decision.sections, inventory.sections.length, 'sections'), categories: indexes(decision.categories, inventory.categories.length, 'categories') };
 }
 
-export function compilePlan(decision: IntentDecision, inventory: PageInventory, ranked: RankedStory[], profile: Profile, source: PersonalizationPlan['source']): PersonalizationPlan {
+export function compilePlan(decision: IntentDecision, inventory: PageInventory, ranked: RankedStory[], profile: Profile, source: PersonalizationPlan['source'], categoryScores: Record<string, number> = {}): PersonalizationPlan {
   const budget = profile.budget ?? decision.budget;
   const eligible = (id: string) => { const item = inventory.items.find(i => i.id === id)!; return !budget || item.price == null || item.price <= budget; };
   const selected = decision.products.map(index => inventory.items[index]).filter(item => item.sectionId === inventory.primarySectionId && item.kind === 'product' && eligible(item.id)).map(item => item.id);
   const primaryIds = inventory.sections.find(s => s.id === inventory.primarySectionId)?.itemIds || [];
   const primaryRanked = ranked.filter(item => primaryIds.includes(item.id));
   const prioritized = [...primaryRanked].sort((a, b) => {
-    const score = (item: RankedStory) => item.score + (selected.includes(item.id) ? 0.16 * (1 - selected.indexOf(item.id) / Math.max(selected.length, 1)) : 0);
+    const score = (item: RankedStory) => item.score + (selected.includes(item.id) ? 0.24 * (1 - selected.indexOf(item.id) / Math.max(selected.length, 1)) : 0);
     return score(b) - score(a);
   });
   const primaryOrder = completeOrder([...prioritized.filter(item => item.kind === 'product' && eligible(item.id)).map(item => item.id), ...prioritized.map(item => item.id)], primaryIds);
   const itemOrders = Object.fromEntries(inventory.sections.map(section => [section.id, section.id === inventory.primarySectionId ? primaryOrder : completeOrder(ranked.filter(item => section.itemIds.includes(item.id)).map(item => item.id), section.itemIds)]));
-  const sectionOrder = completeOrder(decision.sections.map(i => inventory.sections[i].id), inventory.sections.map(s => s.id));
-  const categoryOrder = completeOrder(decision.categories.map(i => inventory.categories[i].id), inventory.categories.map(c => c.id));
+  const sectionOrder = completeOrder([inventory.primarySectionId, ...decision.sections.map(i => inventory.sections[i].id)], inventory.sections.map(s => s.id));
+  const modelCategories = completeOrder(decision.categories.map(i => inventory.categories[i].id), inventory.categories.map(c => c.id));
+  const normalize = (text: string) => text.toLowerCase().replace(/apple|[^a-z0-9]/g, '');
+  const affinity = (id: string) => {
+    const category = normalize(inventory.categories.find(category => category.id === id)?.title || '');
+    if (!category) return 0;
+    return primaryOrder.slice(0, 4).reduce((sum, id, index) => sum + (normalize(inventory.items.find(item => item.id === id)?.title || '').includes(category) ? 0.45 / (index + 1) : 0), 0);
+  };
+  const categoryOrder = [...modelCategories].sort((a, b) => {
+    const priority = (id: string) => (categoryScores[id] || 0) + affinity(id) + 0.06 * (1 - modelCategories.indexOf(id) / modelCategories.length);
+    return priority(b) - priority(a);
+  });
   const key = inventoryKey(inventory);
   const id = createHash('sha256').update(JSON.stringify([decision, profile, key])).digest('hex').slice(0, 20);
   return { id, profileId: profile.id, inventoryKey: key, source, intent: { title: decision.title, query: decision.query, budget }, sectionOrder, categoryOrder, itemOrders,

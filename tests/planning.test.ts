@@ -26,6 +26,7 @@ test('budget constraints outrank the model while retaining every native item', (
   assert.equal(plan.itemOrders.products[0], 'air');
   assert.deepEqual(new Set(plan.itemOrders.products), new Set(['air', 'pro', 'phone']));
   assert.equal(plan.collection.itemIds.includes('pro'), false);
-  assert.equal(plan.sectionOrder[0], 'offers');
+  assert.equal(plan.sectionOrder[0], 'products');
+  assert.equal(plan.sectionOrder[1], 'offers');
   assert.deepEqual(completeOrder(['unknown', 'air', 'air'], ['pro', 'air']), ['air', 'pro']);
 });

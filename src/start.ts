@@ -12,12 +12,12 @@ if (running) {
     const result = await fetch(`${base}/api/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!result.ok) throw new Error((await result.json() as any).error);
   }
-  console.log('Cloak is open on the original Apple Store. Click “Cloak this page” to personalize it.');
+  console.log('Apple is open in Original mode. Choose “Cloaked” to personalize it.');
 } else {
   const app = await import('./server.ts');
   app.store.value.enabled = false; await app.store.save();
   try {
     await app.browser.open('apple');
-    console.log('Original Apple Store is open. Click “Cloak this page” when you’re ready.');
+    console.log('Apple is open in Original mode. Choose “Cloaked” when you’re ready.');
   } catch (error) { console.error('Could not open Apple Store:', (error as Error).message, '\nRun npm start again to retry.'); }
 }

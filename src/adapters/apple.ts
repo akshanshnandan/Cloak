@@ -1,189 +1,73 @@
-// Serialized into apple.com by Playwright. All DOM changes are reversible.
+// Apple-specific extraction and registration; layout operations live in the reusable engine.
 export function installAppleCloak() {
   const win = window as any;
-  if (win.__cloak) return;
-  const clean = (text: string | null | undefined) => (text || '').replace(/\s+/g, ' ').trim();
-  const seen = new Set<string>();
-  const cards = Array.from(document.querySelectorAll<HTMLElement>('.rf-ccard'))
-    .filter(node => node.querySelector('.rf-ccard-content-headerlink'))
-    .map((node, originalIndex) => {
-      const link = node.querySelector<HTMLAnchorElement>('.rf-ccard-content-headerlink')!;
-      const title = clean(link.textContent);
-      let hash = 2166136261;
-      for (const char of `${link.href}|${title}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
-      const description = [clean(node.querySelector('.rf-ccard-content-desccontent')?.textContent), clean(node.querySelector('img')?.alt)].filter(Boolean).join(' ').slice(0, 700) || title;
-      return { node, style: node.getAttribute('style'), story: { id: `apple-${(hash >>> 0).toString(16)}`, title, url: link.href, description, originalIndex } };
-    }).filter(card => { const key = `${card.story.title}|${card.story.url}`; if (seen.has(key)) return false; seen.add(key); return true; }).slice(0, 70);
-
-  const host = document.createElement('div');
-  host.id = 'cloak-controls';
-  host.style.cssText = 'position:fixed;right:22px;bottom:22px;z-index:2147483647;max-width:calc(100vw - 32px);';
-  const root = host.attachShadow({ mode: 'open' });
-  root.innerHTML = `<style>
-    :host{all:initial;color-scheme:light}*{box-sizing:border-box}[hidden]{display:none!important}button,input,textarea,select{font:inherit}button,select{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #777;outline-offset:3px}button{color:inherit;border:0}button:disabled{opacity:.55;cursor:wait}
-    .panel{width:284px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 44px);overflow:auto;border:1px solid #00000014;border-radius:20px;background:#fffffff5;backdrop-filter:blur(24px);box-shadow:0 8px 45px #00000016,0 1px 3px #0001;font:12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1d1d1f}
-    header{display:flex;align-items:center;justify-content:space-between;padding:15px 17px 10px;gap:12px}.brand{font-size:21px;letter-spacing:-1px;font-weight:650;display:flex;align-items:center;gap:7px}.mark{width:16px;height:19px;border:5px solid #1d1d1f;border-right:0;border-radius:14px 0 0 14px;transform:rotate(-14deg)}.header-actions{display:flex;gap:7px;align-items:center}.state{font-size:9px;color:#6e6e73;padding-right:3px}.icon{display:grid;place-items:center;border-radius:50%;width:25px;height:25px;background:#f0f0f3;color:#6e6e73;font-size:16px}.icon svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.5}
-    .body{padding:4px 17px 17px}.headline{font-size:14px;font-weight:550;letter-spacing:-.25px;margin:4px 0 5px}.status{font-size:11px;color:#6e6e73;margin:0 0 13px;line-height:1.6}.label{display:block;font-size:10px;color:#6e6e73;margin-bottom:5px}select{width:100%;padding:8px 10px;background:#f5f5f7;border:1px solid #e7e7ec;border-radius:8px;color:#414145;font-size:11px;margin-bottom:12px}.primary{width:100%;min-height:38px;border-radius:11px;background:#1d1d1f;color:#fff;font-size:12px;font-weight:500;padding:9px 13px}.primary:hover{background:#363638}.primary.undo{background:#ededf0;color:#333}.find{display:block;width:100%;text-align:left;background:none;font-size:11px;line-height:1.5;padding:12px 0 0;color:#55555b}.find strong{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:245px}.find span{font-size:10px;color:#6e6e73}.footnote{font-size:9px;color:#6e6e73;margin:11px 0 0;text-align:center}.collapsed{width:169px}.collapsed header{padding:11px 14px}.collapsed .body{display:none}.collapsed #settings-button,.collapsed .state{display:none}
-    .settings label{display:block;font-size:11px;font-weight:500;margin:12px 0 5px}input,textarea{width:100%;border:1px solid #d7d7dd;border-radius:8px;background:#fafafa;color:#333;padding:9px 10px;font-size:11px;line-height:1.6;resize:vertical}textarea{min-height:70px}.settings h2{font-size:16px;font-weight:600;letter-spacing:-.4px;margin:4px 0 0}.settings p{font-size:11px;color:#6e6e73;margin:5px 0 12px}.settings .primary{margin-top:14px}.secondary{width:100%;background:none;color:#6e6e73;font-size:11px;padding:9px}.settings .error,.error{color:#6f3f3f}.retry{font-size:11px;text-decoration:underline;background:none;padding:0 0 12px;color:#555}
-    @media(max-width:480px){.panel{width:266px}header{padding:13px 16px 9px}.body{padding:3px 16px 15px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-  </style>
-  <section class="panel" aria-label="Cloak personalization controls">
-    <header><div class="brand"><i class="mark"></i>cloak</div><div class="header-actions"><span class="state" id="view-state">Original</span><button class="icon" id="settings-button" aria-label="Edit your perspective"><svg viewBox="0 0 16 16"><path d="M2 5h3m4 0h5M2 11h7m4 0h1"/><circle cx="7" cy="5" r="2"/><circle cx="11" cy="11" r="2"/></svg></button><button class="icon" id="minimize" aria-label="Minimize Cloak" aria-expanded="true">−</button></div></header>
-    <div class="body"><div id="main"><p class="headline" id="headline">The Apple Store, as it is.</p><p class="status" id="status" role="status">Choose your perspective. Then see the difference.</p><label class="label" for="profile">Your perspective</label><select id="profile" aria-label="Personal profile"></select><button class="retry" id="retry" hidden>Retry loading local AI</button><button class="primary" id="apply">Cloak this page <span aria-hidden="true">✦</span></button><button class="find" id="top-match" hidden><strong></strong><span>Find your top match on the page ↗</span></button><p class="footnote">Local AI. Original design. Always reversible.</p></div>
-    <form class="settings" id="settings" hidden><h2>Your perspective.</h2><p>A little context goes a long way.</p><label for="name">Profile name</label><input id="name" maxlength="60" required><label for="description">What matters to you?</label><textarea id="description" rows="4" maxlength="2000" required></textarea><label for="interests">Interests, separated by commas</label><input id="interests" maxlength="960"><label for="avoid">Less of</label><textarea id="avoid" rows="2" maxlength="1000"></textarea><p id="form-error" class="error" role="alert"></p><button type="submit" class="primary">Save perspective</button><button type="button" class="secondary" id="cancel">Back to the page</button><button type="button" class="secondary" id="reset">Reset this profile’s learning</button></form></div>
-  </section>`;
-  document.documentElement.appendChild(host);
-  const $ = (selector: string) => root.querySelector(selector) as HTMLElement;
-  let latest: any, badges: HTMLElement[] = [], pendingFocus = false, moved = false, applied = '', focusRequest = 0;
-  let savedScroll = { x: window.scrollX, y: window.scrollY };
-  let scrollers: { node: HTMLElement; left: number }[] = [];
-  async function action(payload: any) {
-    try { await win.cloakAction(payload); return true; }
-    catch (error) { $('#status').textContent = (error as Error).message; $('#form-error').textContent = (error as Error).message; return false; }
+  if (win.__cloakAdapter) return;
+  const engine = win.__cloakDom;
+  if (!engine) throw new Error('Cloak’s DOM engine is unavailable');
+  const clean = (text: string | null | undefined) => (text || '').replace(/\s+/g, ' ').replace(/\s*- \(Opens in a new window\)/g, '').replace(/\s*- (New|Free engraving)$/g, '').trim();
+  const hash = (text: string) => { let value = 2166136261; for (const char of text) value = Math.imul(value ^ char.charCodeAt(0), 16777619); return (value >>> 0).toString(16); };
+  const nativeSections = Array.from(document.querySelectorAll<HTMLElement>('.rs-cardsshelf')).filter(node => node.querySelector('.rs-cards-shelf-mainheader'));
+  const items: any[] = [];
+  const sections = nativeSections.map((node, index) => {
+    const id = `section-${index}`;
+    const nodes = Array.from(node.querySelectorAll<HTMLElement>('.rf-cards-scroller-itemview')).map(item => item.closest<HTMLElement>('[data-core-scroller-item]') || item);
+    const entries = nodes.map((itemNode, itemIndex) => {
+      const links = Array.from(itemNode.querySelectorAll<HTMLAnchorElement>('.rf-ccard-content-headerlink, .rf-recommcard-content-title a'));
+      const link = links[0] || itemNode.querySelector<HTMLAnchorElement>('a[href]');
+      const title = clean(links.map(a => a.textContent).join(' · ') || itemNode.querySelector('h3')?.textContent || link?.textContent);
+      const url = link?.href || location.href;
+      const priceText = clean(itemNode.querySelector('.rf-ccard-content-descprice, .rf-recommcard-content-price')?.textContent);
+      const match = priceText.match(/\$([\d,]+(?:\.\d{2})?)/);
+      const price = match ? Number(match[1].replace(/,/g, '')) : null;
+      const description = clean(itemNode.querySelector('.rf-ccard-content-desccontent, .rf-ccard-content-desc')?.textContent || itemNode.querySelector('.rf-recommcard-content-title')?.textContent || itemNode.textContent).slice(0, 550);
+      const image = Array.from(itemNode.querySelectorAll<HTMLImageElement>('img')).find(img => img.width > 32);
+      const story = { id: `apple-${hash(url + '|' + title + '|' + id)}`, title: title || 'Apple collection', url, description: clean(description + ' ' + (image?.alt || '')).slice(0, 750), price, currency: 'USD', sectionId: id, kind: price !== null || /\/shop\/(buy-|product\/)/.test(url) ? 'product' : 'content', education: links.some(a => { try { const u = new URL(a.href); return ['www.apple.com', 'apple.com'].includes(u.hostname) && /^\/(us-edu\/|shop\/education-pricing(?:\/|$))/.test(u.pathname); } catch { return false; } }), originalIndex: items.length };
+      const entry = { id: story.id, node: itemNode, story, originalIndex: itemIndex }; items.push(entry); return entry;
+    });
+    engine.register(`items:${id}`, entries.map(entry => ({ id: entry.id, node: entry.node })));
+    engine.registerText(`heading:${id}`, node.querySelector('.rs-cards-shelf-mainheader'), node, '.rs-cards-shelf-mainheader');
+    engine.registerText(`subheading:${id}`, node.querySelector('.rs-cards-shelf-secondaryheader'), node, '.rs-cards-shelf-secondaryheader');
+    return { id, node, title: clean(node.querySelector('.rs-cards-shelf-mainheader')?.textContent), description: clean(node.querySelector('.rs-cards-shelf-secondaryheader')?.textContent), itemIds: entries.map(entry => entry.id), originalIndex: index };
+  });
+  engine.register('sections', sections.map(section => ({ id: section.id, node: section.node })));
+  const categoryNodes = Array.from(document.querySelectorAll<HTMLElement>('.rs-productnav-cardsshelf .rf-cards-scroller-itemview')).map(item => item.closest<HTMLElement>('[data-core-scroller-item]') || item);
+  const categories = categoryNodes.map((node, index) => ({ id: `category-${index}`, node, title: clean(node.querySelector('.rf-productnav-card-title')?.textContent), url: node.querySelector<HTMLAnchorElement>('a')?.href || '', originalIndex: index }));
+  engine.register('categories', categories.map(category => ({ id: category.id, node: category.node })));
+  const globalNavigation = Array.from(document.querySelectorAll<HTMLElement>('#globalnav .globalnav-list > .globalnav-item-menu'));
+  const menus = globalNavigation.map((node, index) => ({ id: `menu-${index}`, node, title: clean(node.querySelector('.globalnav-link-text')?.textContent || node.querySelector('.globalnav-link')?.getAttribute('aria-label')) }));
+  if (menus.length && menus.every(menu => menu.node.parentNode === menus[0].node.parentNode)) engine.register('navigation', menus);
+  const primarySectionId = [...sections].sort((a, b) => b.itemIds.filter(id => items.find(item => item.id === id)?.story.kind === 'product').length - a.itemIds.filter(id => items.find(item => item.id === id)?.story.kind === 'product').length)[0]?.id || '';
+  const inventory = { url: location.href, primarySectionId, sections: sections.map(({ node, ...section }) => section), categories: categories.map(({ node, ...category }) => category), items: items.map(item => item.story) };
+  const scrollers = Array.from(document.querySelectorAll<HTMLElement>('.rf-cards-scroller-content'));
+  scrollers.forEach(viewport => { const root = viewport.closest<HTMLElement>('.rf-cards-scroller'); if (root) engine.registerPager(root, viewport); });
+  let currentPlan = '', resetVersion = 0, active = false;
+  const physicalOrder = (entries: any[]) => [...entries].sort((a, b) => a.node.compareDocumentPosition(b.node) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1).map(entry => entry.id);
+  function restore() {
+    resetVersion++; engine.restore(); currentPlan = ''; active = false;
   }
-  function closeSettings() { $('#settings').hidden = true; $('#main').hidden = false; $('#settings-button').setAttribute('aria-expanded', 'false'); }
-  $('#minimize').onclick = () => {
-    const collapsed = $('.panel').classList.toggle('collapsed');
-    $('#minimize').textContent = collapsed ? '+' : '−';
-    $('#minimize').setAttribute('aria-expanded', String(!collapsed));
-    $('#minimize').setAttribute('aria-label', collapsed ? 'Expand Cloak' : 'Minimize Cloak');
-  };
-  $('#settings-button').setAttribute('aria-expanded', 'false');
-  $('#settings-button').onclick = () => {
-    if (!$('#settings').hidden) { closeSettings(); return; }
-    const profile = latest?.profiles.find((p: any) => p.id === latest.activeProfileId); if (!profile) return;
-    for (const name of ['name', 'description', 'avoid']) ($(`#${name}`) as HTMLInputElement).value = profile[name];
-    ($('#interests') as HTMLInputElement).value = profile.interests.join(', ');
-    $('#form-error').textContent = ''; $('#main').hidden = true; $('#settings').hidden = false;
-    $('#settings-button').setAttribute('aria-expanded', 'true'); $('#name').focus();
-  };
-  $('#cancel').onclick = closeSettings;
-  root.addEventListener('keydown', event => { if ((event as KeyboardEvent).key === 'Escape') { closeSettings(); $('#settings-button').focus(); } });
-  ($('#settings') as HTMLFormElement).onsubmit = async event => {
-    event.preventDefault();
-    const value = (id: string) => ($(`#${id}`) as HTMLInputElement).value;
-    const button = $('#settings button[type=submit]') as HTMLButtonElement; button.disabled = true;
-    const ok = await action({ type: 'save-profile', name: value('name'), description: value('description'), avoid: value('avoid'), interests: value('interests').split(',').map(s => s.trim()).filter(Boolean) });
-    button.disabled = false; if (ok) closeSettings();
-  };
-  $('#reset').onclick = () => action({ type: 'clear-feedback' });
-  ($('#profile') as HTMLSelectElement).onchange = event => action({ type: 'profile', id: (event.target as HTMLSelectElement).value });
-  $('#apply').onclick = () => action({ type: 'toggle', enabled: !latest?.enabled });
-  $('#retry').onclick = () => action({ type: 'retry-model' });
-  $('#top-match').onclick = () => { if (latest?.ranked[0]) find(latest.ranked[0].id); };
-  function captureScroll() {
-    savedScroll = { x: window.scrollX, y: window.scrollY };
-    scrollers = Array.from(document.querySelectorAll<HTMLElement>('.rf-cards-scroller-content')).map(node => ({ node, left: node.scrollLeft }));
-  }
-  function restore(restoreScroll = false) {
-    badges.forEach(b => b.remove()); badges = [];
-    cards.forEach(({ node, style }) => { if (style === null) node.removeAttribute('style'); else node.setAttribute('style', style); });
-    if (restoreScroll && moved) {
-      scrollers.forEach(({ node, left }) => node.scrollTo({ left, behavior: 'instant' }));
-      window.scrollTo({ left: savedScroll.x, top: savedScroll.y, behavior: 'instant' }); moved = false;
+  function apply(plan: any) {
+    if (!plan || plan.id === currentPlan) return;
+    const operations = [{ group: 'sections', order: plan.sectionOrder }, { group: 'categories', order: plan.categoryOrder }, ...sections.map(section => ({ group: `items:${section.id}`, order: plan.itemOrders[section.id] }))];
+    if (menus.length) {
+      const preferred = plan.categoryOrder.map((id: string) => categories.find(category => category.id === id)?.title.toLowerCase());
+      const order = [...menus].sort((a, b) => { const rank = (menu: any) => { const index = preferred.indexOf(menu.title.toLowerCase()); return index < 0 ? 100 + menus.indexOf(menu) : index; }; return rank(a) - rank(b); }).map(menu => menu.id);
+      operations.push({ group: 'navigation', order });
     }
+    engine.capture(scrollers);
+    engine.apply(operations, [{ id: `heading:${primarySectionId}`, text: plan.collection.title.replace(/[.!?]+$/, '') + '.' }, { id: `subheading:${primarySectionId}`, text: '\u00a0Selected for you.' }]);
+    currentPlan = plan.id; active = true;
+    // DOM order is the personalization. Reset native scroll offsets so first really means first.
+    const version = ++resetVersion;
+    const reset = () => { if (version !== resetVersion || !active) return; scrollers.forEach(node => node.scrollTo({ left: 0, behavior: 'instant' })); };
+    reset(); requestAnimationFrame(() => requestAnimationFrame(reset));
   }
-  function find(id: string) {
-    const card = cards.find(c => c.story.id === id); if (!card) return;
-    if (!scrollers.length) captureScroll();
-    moved = true; focusRequest++;
-    card.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
-  }
-  function focusShelves(ranked: any[]) {
-    // Use the native scroller. Card order, event handlers and carousel controls stay intact.
-    for (const { node } of scrollers) {
-      const best = ranked.map(story => cards.find(c => c.story.id === story.id)).find(card => card && node.contains(card.node));
-      if (!best) continue;
-      const offset = best.node.getBoundingClientRect().left - node.getBoundingClientRect().left;
-      node.scrollTo({ left: Math.max(0, node.scrollLeft + offset - 24), behavior: 'instant' });
-      moved = true;
-    }
-    // The explicit Cloak action also reveals the highest-ranked real product.
-    const first = cards.find(card => card.story.id === ranked[0]?.id);
-    if (first) {
-      const bounds = first.node.getBoundingClientRect();
-      if (bounds.top < 60 || bounds.bottom > innerHeight) {
-        window.scrollTo({ top: Math.max(0, window.scrollY + bounds.top - 140), behavior: 'instant' });
-        moved = true;
-      }
-    }
-  }
-  function settleFocus(ranked: any[], signature: string) {
-    const request = ++focusRequest;
-    let checks = 0, stable = 0;
-    const check = () => {
-      if (request !== focusRequest || !latest?.enabled || applied !== signature) return;
-      const card = cards.find(c => c.story.id === ranked[0]?.id);
-      if (!card) return;
-      const bounds = card.node.getBoundingClientRect();
-      const visible = bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
-      if (!visible) { focusShelves(ranked); stable = 0; } else stable++;
-      // Apple can reset native scrollers while hydration or resize effects settle.
-      // This bounded check ends as soon as the target is stable, or the user interacts.
-      if (++checks < 8 && stable < 3) setTimeout(check, 120);
-    };
-    requestAnimationFrame(() => requestAnimationFrame(() => { if (request === focusRequest && latest?.enabled && applied === signature) { focusShelves(ranked); setTimeout(check, 120); } }));
-  }
-  win.__cloak = {
-    extract: () => cards.map(c => c.story), restore: () => restore(true), find,
-    update: (state: any) => {
-      if (state.enabled && !latest?.enabled) { captureScroll(); pendingFocus = true; }
-      if (state.enabled && latest && latest.activeProfileId !== state.activeProfileId) pendingFocus = true;
-      latest = state;
-      const select = $('#profile') as HTMLSelectElement;
-      if (JSON.stringify(Array.from(select.options).map(o => [o.value, o.text])) !== JSON.stringify(state.profiles.map((p: any) => [p.id, p.name]))) {
-        select.replaceChildren(...state.profiles.map((p: any) => { const option = document.createElement('option'); option.value = p.id; option.textContent = p.name; return option; }));
-      }
-      select.value = state.activeProfileId;
-      const enabled = state.enabled, ready = state.model.phase === 'ready';
-      $('#view-state').textContent = enabled ? (state.busy || !ready ? 'Preparing' : 'Cloaked') : 'Original';
-      $('#headline').textContent = enabled ? 'The Apple Store. For you.' : 'The Apple Store, as it is.';
-      $('#apply').textContent = enabled ? 'Show original' : 'Cloak this page ✦'; $('#apply').classList.toggle('undo', enabled);
-      $('#apply').setAttribute('aria-pressed', String(enabled));
-      $('#status').textContent = state.error || (state.model.phase === 'error' ? 'Local AI couldn’t load. Retry below.' : state.busy && enabled ? 'Finding what matters to you…' : enabled && !ready ? 'Local AI is getting ready. You can keep browsing.' : enabled ? `${cards.length} items considered. Your interests come into focus.` : 'Choose your perspective. Then see the difference.');
-      $('#status').classList.toggle('error', !!state.error || state.model.phase === 'error'); $('#retry').hidden = state.model.phase !== 'error';
-      $('#top-match').hidden = !enabled || !state.ranked.length || state.busy;
-      if (state.ranked[0]) $('#top-match strong').textContent = state.ranked[0].title;
-      if (!enabled) { focusRequest++; pendingFocus = false; if (applied !== 'original') restore(true); applied = 'original'; return; }
-      if (state.busy) return;
-      if (!ready) return;
-      const signature = JSON.stringify([state.activeProfileId, state.ranked, state.profiles.find((p: any) => p.id === state.activeProfileId)?.feedback]);
-      if (signature === applied) return;
-      applied = signature;
-      restore();
-      const top = state.ranked.slice(0, Math.min(5, Math.ceil(cards.length / 3)));
-      top.forEach((story: any) => {
-        const card = cards.find(c => c.story.id === story.id); if (!card) return;
-        card.node.style.outline = '2px solid #86868b'; card.node.style.outlineOffset = '-2px'; card.node.style.position = 'relative';
-        card.node.style.borderRadius = getComputedStyle(card.node.querySelector('.rf-ccard-content') || card.node).borderRadius;
-        const badge = document.createElement('div'); badge.dataset.cloakBadge = story.id;
-        badge.style.cssText = 'position:absolute;right:14px;bottom:14px;z-index:3;';
-        const shadow = badge.attachShadow({ mode: 'open' });
-        shadow.innerHTML = `<style>:host{all:initial}*{box-sizing:border-box}.badge{display:flex;align-items:center;gap:5px;background:#fffffff5;backdrop-filter:blur(12px);color:#1d1d1f;box-shadow:0 1px 8px #0001;border:1px solid #0001;padding:5px 7px 5px 10px;border-radius:20px;font:11px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.badge span{padding-right:3px}button{cursor:pointer;border:0;border-radius:50%;width:26px;height:26px;font:15px/1 sans-serif;background:#ededf0;color:#555}button[aria-pressed=true]{background:#222;color:white}button:focus-visible{outline:2px solid #777;outline-offset:2px}</style><div class="badge"><span>✦ For you</span><button aria-label="More like this">+</button><button aria-label="Less like this">−</button></div>`;
-        shadow.querySelector('.badge')!.setAttribute('title', story.reason);
-        const feedback = state.profiles.find((p: any) => p.id === state.activeProfileId)?.feedback.find((f: any) => f.id === story.id);
-        Array.from(shadow.querySelectorAll('button')).forEach((button, i) => {
-          const value = i === 0 ? 1 : -1; button.setAttribute('aria-pressed', String(feedback?.value === value));
-          button.onclick = event => { event.preventDefault(); event.stopPropagation(); void action({ type: 'feedback', id: story.id, value }); };
-        });
-        badge.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
-        card.node.appendChild(badge); badges.push(badge);
-      });
-      if (pendingFocus && state.ranked.length) {
-        pendingFocus = false;
-        settleFocus(state.ranked, signature);
-      }
-    }
-  };
+  function find(id: string) { const entry = items.find(item => item.id === id); entry?.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); }
+  win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find,
+    diagnostics: () => ({ planId: currentPlan, sections: physicalOrder(sections), categories: physicalOrder(categories), itemOrders: Object.fromEntries(sections.map(section => [section.id, physicalOrder(items.filter(item => item.story.sectionId === section.id))])), connected: items.every(item => item.node.isConnected), engine: engine.diagnostics() }) };
   document.addEventListener('click', event => {
-    if (!latest?.enabled || event.composedPath().some(n => n instanceof HTMLElement && (n.dataset.cloakBadge || n.id === 'cloak-controls'))) return;
-    const target = event.target instanceof Element ? event.target.closest('.rf-ccard') : null;
-    const card = cards.find(c => c.node === target); if (card) void action({ type: 'open', id: card.story.id });
+    if (!active || event.composedPath().some(node => node instanceof HTMLElement && node.id === 'cloak-controls')) return;
+    const target = event.target instanceof Element ? event.target.closest('.rf-cards-scroller-itemview') : null;
+    const item = items.find(item => target && item.node.contains(target));
+    if (item) void win.cloakAction({ type: 'open', id: item.id }).catch(() => {});
   }, { capture: true });
-  const stopFocusOnInteraction = (event: Event) => {
-    if (!event.composedPath().some(n => n instanceof HTMLElement && (n.dataset.cloakBadge || n.id === 'cloak-controls'))) focusRequest++;
-  };
-  document.addEventListener('pointerdown', stopFocusOnInteraction, { capture: true, passive: true });
-  document.addEventListener('wheel', stopFocusOnInteraction, { capture: true, passive: true });
-  document.addEventListener('keydown', event => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) stopFocusOnInteraction(event); }, { capture: true });
 }
