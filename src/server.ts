@@ -23,7 +23,7 @@ const planner = new LocalPlanner(path.join(root, '.cache'), () => broadcast());
 const browser = new BrowserManager(path.join(store.directory, 'browser'), state, action, rerank, broadcast);
 function state() {
   const currentPlan = plan && browser?.inventory && plan.inventoryKey === inventoryKey(browser.inventory) ? plan : null;
-  return { ...store.value, engineVersion: 3, model: model.status, modelName: MODEL, planner: planner.status, plannerName: PLANNER_MODEL, plan: currentPlan, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
+  return { ...store.value, engineVersion: 4, model: model.status, modelName: MODEL, planner: planner.status, plannerName: PLANNER_MODEL, plan: currentPlan, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
 }
 function broadcast() {
   const data = `data: ${JSON.stringify(state())}\n\n`;

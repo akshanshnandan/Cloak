@@ -20,12 +20,19 @@ async function action(payload: any) {
   assert.equal(app.state().error, ''); await app.browser.update();
 }
 async function layout(page: Page) { return page.evaluate(() => { const result = (window as any).__cloak.diagnostics(); delete result.engine; return result; }); }
+async function gridCards(page: Page, sectionIndex: number) {
+  return page.locator('.rs-cardsshelf').filter({ has: page.locator('.rs-cards-shelf-mainheader') }).nth(sectionIndex).locator('[data-cloak-grid] > [data-cloak-griditem]').evaluateAll(nodes => nodes.filter(node => getComputedStyle(node).display !== 'none').map(node => {
+    const native = node.querySelector('.rf-ccard,.rf-recommcard') || node, box = native.getBoundingClientRect();
+    return { width: box.width, top: box.top, left: box.left, right: box.right };
+  }));
+}
 try {
   const started = Date.now();
   await app.browser.open('apple');
   await waitFor(() => !app.state().busy, 'initial local plan');
   assert.equal(app.state().error, '');
   const page = app.browser.page!; await page.setViewportSize({ width: 1440, height: 1050 });
+  await waitFor(() => page.locator('#cloak-controls #brand-logo').evaluate((node: HTMLImageElement) => !node.hidden && node.complete && node.naturalWidth > 0), 'provided Cloak logo loads');
   const pageErrors: string[] = []; page.on('pageerror', error => pageErrors.push(error.message));
   const inventory = app.browser.inventory!;
   assert.ok(inventory.items.length >= 40, 'Extract actual product, accessory and content cards');
@@ -58,19 +65,25 @@ try {
   assert.ok(engineering.sections.indexOf(savings.id) <= 2, 'Verified education pricing is promoted for student needs');
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'work/v2-engineering.png', fullPage: false });
-  console.log('Verified native section, category and product reordering. Testing carousel paging.');
-  // Test native next/previous behavior after moving complete carousel items.
+  console.log('Verified native section, category and product reordering. Testing comparison layout.');
+  assert.equal(engineerPlan.presentation?.layout, 'compare');
+  assert.equal(engineering.layout, 'compare');
   const primaryIndex = engineering.sections.indexOf(inventory.primarySectionId);
   const primary = page.locator('.rs-cardsshelf').filter({ has: page.locator('.rs-cards-shelf-mainheader') }).nth(primaryIndex);
-  const scroller = primary.locator('.rf-cards-scroller-content');
-  await primary.getByRole('button', { name: /Next/ }).click();
-  await waitFor(async () => (await scroller.evaluate(node => node.scrollLeft)) > 50, 'native Apple next button');
-  await page.waitForTimeout(600);
-  const nextLeft = await scroller.evaluate(node => node.scrollLeft);
-  await primary.getByRole('button', { name: /Previous/ }).click();
-  await waitFor(async () => (await scroller.evaluate(node => node.scrollLeft)) < nextLeft, 'native Apple previous button');
-  await page.waitForTimeout(600);
-  console.log('Verified native next and previous controls. Testing second profile.');
+  const comparisonCards = await gridCards(page, primaryIndex);
+  assert.ok(comparisonCards.length >= 4, 'Comparison displays at least four actual product cards');
+  assert.ok(Math.abs(comparisonCards[0].top - comparisonCards[2].top) < 2, 'Comparison places three native products side by side');
+  assert.ok(comparisonCards[3].top > comparisonCards[0].top + 100, 'Comparison creates an actual second row');
+  assert.ok(Math.abs(comparisonCards[0].width - comparisonCards[1].width) < 2, 'Comparison gives products equal visual weight');
+  assert.equal(await primary.getByRole('button', { name: /Next/ }).isVisible(), false, 'Horizontal paging is hidden while native cards form a grid');
+  const reveal = primary.locator('[data-cloak-disclosure] button').first();
+  const collapsedCount = comparisonCards.length;
+  await reveal.click();
+  assert.equal(await reveal.getAttribute('aria-expanded'), 'true');
+  assert.equal((await gridCards(page, primaryIndex)).length, inventory.sections.find(section => section.id === inventory.primarySectionId)!.itemIds.length, 'Disclosure reveals all retained native cards');
+  await reveal.click(); assert.equal((await gridCards(page, primaryIndex)).length, collapsedCount);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Personalized Store fits the desktop viewport');
+  console.log('Verified comparison grid and retained native cards. Testing second profile.');
   await page.getByRole('button', { name: 'Edit preferences' }).click();
   const audit = await new AxeBuilder({ page }).include('#cloak-controls').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   assert.deepEqual(audit.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) })), [], 'Compact controls accessibility');
@@ -79,6 +92,10 @@ try {
   assert.equal(app.state().error, ''); await app.browser.update();
   const creativePlan = structuredClone(app.state().plan!);
   const creative = await layout(page);
+  assert.equal(creativePlan.presentation?.layout, 'immersive');
+  assert.equal(creative.layout, 'immersive');
+  const creativeCards = await gridCards(page, creative.sections.indexOf(inventory.primarySectionId));
+  assert.ok(creativeCards.length >= 3 && creativeCards[0].width > creativeCards[1].width * 1.7, 'Creative layout gives the leading native product a dominant image-led card');
   assert.notDeepEqual(creative.sections, engineering.sections, 'Two people must produce different section hierarchies');
   assert.notDeepEqual(creative.itemOrders[inventory.primarySectionId].slice(0, 4), engineering.itemOrders[inventory.primarySectionId].slice(0, 4), 'Two people must produce different product collections');
   const creativeItems = creativePlan.collection.itemIds.map(id => inventory.items.find(item => item.id === id)!);
@@ -104,6 +121,17 @@ try {
     return (window as any).__originalLinks.filter(([_node, href, text]: [HTMLAnchorElement, string, string]) => !current.some(node => node.href === href && node.textContent === text)).map(([_node, href, text]: [HTMLAnchorElement, string, string]) => ({ href, text }));
   });
   assert.deepEqual(changedLinks, [], 'Every native link and product copy survives unchanged');
+  assert.equal(await page.locator('[data-cloak-grid],[data-cloak-disclosure]').count(), 0, 'Original removes layout grids and all Cloak disclosures');
+  // Native horizontal paging returns with the exact original website layout.
+  const originalPrimaryIndex = original.sections.indexOf(inventory.primarySectionId);
+  const originalPrimary = page.locator('.rs-cardsshelf').filter({ has: page.locator('.rs-cards-shelf-mainheader') }).nth(originalPrimaryIndex);
+  const scroller = originalPrimary.locator('.rf-cards-scroller-content');
+  await originalPrimary.getByRole('button', { name: /Next/ }).click();
+  await waitFor(async () => await scroller.evaluate(node => node.scrollLeft) > 50, 'restored native Apple next button');
+  await page.waitForTimeout(600); const nextLeft = await scroller.evaluate(node => node.scrollLeft);
+  await originalPrimary.getByRole('button', { name: /Previous/ }).click();
+  await waitFor(async () => await scroller.evaluate(node => node.scrollLeft) < nextLeft, 'restored native Apple previous button');
+  await page.waitForTimeout(600);
   for (let i = 0; i < 3; i++) { await action({ type: 'toggle', enabled: true }); await action({ type: 'toggle', enabled: false }); }
   assert.deepEqual((await layout(page)).itemOrders, original.itemOrders, 'Repeated apply/undo cycles restore the same native order');
   // Natural-language refinement is evaluated by the actual local LLM.
@@ -140,7 +168,7 @@ try {
   assert.equal(await page.locator('#cloak-controls').count(), 1);
   assert.equal(app.browser.inventory?.groups?.some(group => group.type === 'items' || group.type === 'sections'), false, 'Configuration choices keep their original order');
   assert.deepEqual(pageErrors, [], 'No native JavaScript errors after restructuring and interaction');
-  const report = { items: inventory.items.length, sections: inventory.sections.length, categories: inventory.categories.length, elapsedSeconds: Math.round((Date.now() - started) / 1000), engineering: { title: engineerPlan.intent.title, products: topItems.map(item => item.title), sections: engineerPlan.sectionOrder }, creative: { title: creativePlan.intent.title, products: creativeItems.map(item => item.title), sections: creativePlan.sectionOrder } };
+  const report = { items: inventory.items.length, sections: inventory.sections.length, categories: inventory.categories.length, elapsedSeconds: Math.round((Date.now() - started) / 1000), engineering: { title: engineerPlan.intent.title, products: topItems.map(item => item.title), sections: engineerPlan.sectionOrder, presentation: engineerPlan.presentation, geometry: comparisonCards }, creative: { title: creativePlan.intent.title, products: creativeItems.map(item => item.title), sections: creativePlan.sectionOrder, presentation: creativePlan.presentation, geometry: creativeCards } };
   await writeFile('work/v2-verification.json', JSON.stringify(report, null, 2));
   console.log('PASS real transformations:', JSON.stringify(report, null, 2));
 } finally {

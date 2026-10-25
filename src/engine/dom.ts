@@ -123,7 +123,7 @@ export function installDomEngine() {
     const mode = options?.layout || 'balanced';
     const columns = mode === 'guided' ? 2 : mode === 'balanced' ? 2 : 3;
     layoutStyle = document.createElement('style'); layoutStyle.dataset.cloakLayoutStyle = 'true';
-    layoutStyle.textContent = `[data-cloak-grid]{display:grid!important;grid-template-columns:repeat(var(--cloak-columns,3),minmax(0,1fr))!important;grid-template-areas:none!important;grid-template-rows:none!important;grid-auto-flow:row!important;grid-auto-columns:minmax(0,1fr)!important;grid-auto-rows:auto!important;gap:24px!important;align-items:stretch!important;transform:none!important;width:100%!important;min-width:0!important;max-width:none!important;overflow:visible!important;list-style:none!important;padding:0!important;margin:0!important;scroll-snap-type:none!important}[data-cloak-grid]>*{grid-column:auto!important;grid-row:auto!important}[data-cloak-griditem]{width:100%!important;max-width:none!important;min-width:0!important;flex:none!important;margin:0!important;transform:none!important;position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;grid-column:auto!important;grid-row:auto!important;order:0!important;scroll-snap-align:none!important}[data-cloak-griditem][hidden]{display:none!important}[data-cloak-featured]{grid-column:span 2!important}[data-cloak-griditem]>.rf-cards-scroller-itemview{transform:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important}[data-cloak-griditem]>.rf-cards-scroller-itemview,[data-cloak-griditem] .rf-ccard,[data-cloak-griditem] .rf-recommcard{width:100%!important;max-width:none!important;min-width:0!important}[data-cloak-griditem] .rf-ccard-content{width:100%!important;box-sizing:border-box!important}[data-cloak-griditem] .rf-ccard-img-wrapper{width:100%!important}[data-cloak-griditem] .rf-ccard-img{left:50%!important;transform:translateX(-50%)!important}[data-cloak-layout=guided] [data-cloak-griditem] .rf-ccard{min-height:500px!important}@media(max-width:1000px){[data-cloak-grid]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px!important}}@media(max-width:700px){[data-cloak-grid]{grid-template-columns:minmax(0,1fr)!important;gap:16px!important}[data-cloak-featured]{grid-column:auto!important}[data-cloak-layout-root]{width:calc(100% - 36px)!important}}`;
+    layoutStyle.textContent = `[data-cloak-grid]{display:grid!important;grid-template-columns:repeat(var(--cloak-columns,3),minmax(0,1fr))!important;grid-template-areas:none!important;grid-template-rows:none!important;grid-auto-flow:row!important;grid-auto-columns:minmax(0,1fr)!important;grid-auto-rows:auto!important;gap:24px!important;align-items:stretch!important;transform:none!important;width:100%!important;min-width:0!important;max-width:none!important;overflow:visible!important;list-style:none!important;padding:0!important;margin:0!important;scroll-snap-type:none!important}[data-cloak-grid]>*{grid-column:auto!important;grid-row:auto!important}[data-cloak-griditem]{width:100%!important;max-width:none!important;min-width:0!important;flex:none!important;margin:0!important;transform:none!important;position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;grid-column:auto!important;grid-row:auto!important;order:0!important;scroll-snap-align:none!important}[data-cloak-griditem][hidden]{display:none!important}[data-cloak-featured]{grid-column:span 2!important}[data-cloak-griditem]>.rf-cards-scroller-itemview{transform:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important}[data-cloak-griditem]>.rf-cards-scroller-itemview,[data-cloak-griditem] .rf-ccard,[data-cloak-griditem] .rf-recommcard{width:100%!important;max-width:none!important;min-width:0!important}[data-cloak-griditem] .rf-ccard-content{width:100%!important;box-sizing:border-box!important}[data-cloak-griditem] .rf-ccard-img-wrapper{width:100%!important}[data-cloak-griditem] .rf-ccard-img{left:50%!important;transform:translateX(-50%)!important}[data-cloak-layout=guided] [data-cloak-griditem] .rf-ccard{min-height:500px!important}[data-cloak-layout] .rs-productnav-cardsshelf .rf-productnav-card{max-height:54px!important;contain:none!important;content-visibility:visible!important}[data-cloak-layout=guided] .rs-productnav-cardsshelf .rf-productnav-card{max-height:108px!important}@media(max-width:1000px){[data-cloak-grid]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px!important}}@media(max-width:700px){[data-cloak-grid]{grid-template-columns:minmax(0,1fr)!important;gap:16px!important}[data-cloak-featured]{grid-column:auto!important}[data-cloak-layout-root]{--cloak-gutter:36px!important}}`;
     document.head.append(layoutStyle); mark(config.main, 'data-cloak-layout', mode);
     // Keep the native page title/navigation, with the compact spacing Apple uses
     // on its product pages so useful content occupies the first screen.
@@ -146,12 +146,12 @@ export function installDomEngine() {
         nodes.forEach(node => {
           style(node, { width: mode === 'guided' ? '112px' : 'auto', height: 'auto', flex: '0 0 auto' });
           style(node.querySelector<HTMLElement>('.rf-cards-scroller-itemview'), { width: 'auto', margin: '0', padding: '0', transform: 'none' });
-          style(node.querySelector<HTMLElement>('.rf-productnav-card'), { width: 'auto', padding: '0' });
+          style(node.querySelector<HTMLElement>('.rf-productnav-card'), { width: 'auto', padding: '0', height: mode === 'guided' ? '108px' : '54px', 'aspect-ratio': 'auto' });
         });
         let ancestor = parent.parentElement;
         while (ancestor && ancestor !== shelf) { style(ancestor, { width: '100%', height: 'auto', 'min-height': '0', 'max-height': 'none', overflow: 'visible', padding: '0', transform: 'none' }); ancestor = ancestor.parentElement; }
         const root = parent.closest<HTMLElement>('.rf-cards-scroller');
-        if (root) { style(root, { width: 'calc(100% - 96px)', 'max-width': '1180px', 'margin-left': 'auto', 'margin-right': 'auto' }); root.querySelectorAll<HTMLElement>('button').forEach(node => style(node, { display: 'none' })); }
+        if (root) { style(root, { width: 'calc(100% - var(--cloak-gutter, 96px))', 'max-width': '1180px', 'margin-left': 'auto', 'margin-right': 'auto' }); root.querySelectorAll<HTMLElement>('button').forEach(node => style(node, { display: 'none' })); }
       });
     } else {
       config.main.querySelectorAll<HTMLElement>('[class*="PageHeader_container"]').forEach(node => style(node, { 'padding-top': '36px', 'padding-bottom': '28px' }));
@@ -164,7 +164,7 @@ export function installDomEngine() {
       if (mode === 'immersive' && group.nodes.length >= 3) mark(group.nodes[0], 'data-cloak-featured', 'true');
       const root = group.root || group.viewport || group.parent;
       mark(root, 'data-cloak-layout-root', 'true');
-      if (config.kind === 'store' || root !== group.parent) style(root, { 'width': 'calc(100% - 96px)', 'max-width': '1180px', 'margin-left': 'auto', 'margin-right': 'auto', 'overflow': 'visible', 'height': 'auto', 'padding-left': '0', 'padding-right': '0' });
+      if (config.kind === 'store' || root !== group.parent) style(root, { 'width': 'calc(100% - var(--cloak-gutter, 96px))', 'max-width': '1180px', 'margin-left': 'auto', 'margin-right': 'auto', 'overflow': 'visible', 'height': 'auto', 'padding-left': '0', 'padding-right': '0' });
       let ancestor = group.parent.parentElement;
       while (ancestor && ancestor !== root && ancestor !== config.main) { style(ancestor, { 'overflow': 'visible', 'width': '100%', 'max-width': 'none', 'height': 'auto', 'transform': 'none', 'padding-left': '0', 'padding-right': '0' }); ancestor = ancestor.parentElement; }
       if (group.viewport) style(group.viewport, { 'scroll-snap-type': 'none', 'overflow': 'visible', 'height': 'auto', 'transform': 'none', 'padding-left': '0', 'padding-right': '0' });
@@ -195,6 +195,20 @@ export function installDomEngine() {
       window.scrollTo({ left: savedWindow.x, top: savedWindow.y, behavior: 'instant' });
       active = false; scroll.clear();
       buttons.forEach((state, button) => { button.disabled = state.disabled; if (state.aria === null) button.removeAttribute('aria-disabled'); else button.setAttribute('aria-disabled', state.aria); }); buttons.clear();
+      // Native galleries measured a vertical grid while personalized. Restoring
+      // the horizontal list can change scrollWidth without changing the viewport
+      // width, which does not wake their ResizeObserver by itself.
+      window.dispatchEvent(new Event('resize'));
+      pagers.forEach(({ viewport }) => viewport.dispatchEvent(new Event('scroll')));
+      requestAnimationFrame(() => { if (!active) { window.dispatchEvent(new Event('resize')); pagers.forEach(({ viewport }) => viewport.dispatchEvent(new Event('scroll'))); } });
+      const restorePaging = () => {
+        if (active) return;
+        pagers.forEach(({ root, viewport }) => {
+          if (viewport.scrollWidth <= viewport.clientWidth + 2) return;
+          root.querySelectorAll<HTMLElement>('[class*="hidePaddles"]').forEach(node => Array.from(node.classList).filter(name => /hidePaddles/.test(name)).forEach(name => node.classList.remove(name)));
+        });
+      };
+      restorePaging(); requestAnimationFrame(restorePaging);
     }
   }
   function apply(operations: { group: string; order: string[] }[], labels: { id: string; text: string }[]) {

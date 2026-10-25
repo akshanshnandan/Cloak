@@ -18,15 +18,21 @@ async function action(payload: any, wait = true) {
   assert.equal(response.status, 200, await response.text()); if (wait) await settled(); else await app.browser.update();
 }
 const layout = (page: Page) => page.evaluate(() => { const d = (window as any).__cloak.diagnostics(); delete d.engine; return d; });
+const gridGeometry = (page: Page) => page.locator('[data-cloak-grid]').evaluateAll(grids => grids.filter(grid => grid.getBoundingClientRect().height > 0 && getComputedStyle(grid).display !== 'none' && !grid.closest('[hidden]')).map(grid => {
+  const parent = grid.getBoundingClientRect();
+  return { columns: getComputedStyle(grid).gridTemplateColumns.split(/\s+/).length, left: parent.left, right: parent.right, cards: Array.from(grid.querySelectorAll(':scope > [data-cloak-griditem]')).filter(node => !node.hasAttribute('hidden') && getComputedStyle(node).display !== 'none').map(node => { const box = node.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, width: box.width, height: box.height }; }) };
+}));
 const report: any[] = [];
 try {
   await app.browser.open('apple'); await settled();
   const page = app.browser.page!; await page.setViewportSize({ width: 1440, height: 1050 });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  for (const [index, url] of ['https://www.apple.com/', 'https://www.apple.com/mac/', 'https://www.apple.com/iphone/', 'https://www.apple.com/macbook-air/', 'https://support.apple.com/', 'https://www.apple.com/accessibility/'].entries()) {
+  const journeyUrls = process.env.CLOAK_JOURNEY_URL ? [process.env.CLOAK_JOURNEY_URL] : ['https://www.apple.com/', 'https://www.apple.com/mac/', 'https://www.apple.com/iphone/', 'https://www.apple.com/macbook-air/', 'https://support.apple.com/', 'https://www.apple.com/accessibility/'];
+  for (const [index, url] of journeyUrls.entries()) {
     await action({ type: 'toggle', enabled: false }, false);
     await page.goto(url, { waitUntil: 'domcontentloaded' }); await app.browser.read(page); await settled();
     assert.equal(await page.locator('#cloak-controls').count(), 1);
+    await until(() => page.locator('#cloak-controls #brand-logo').evaluate((node: HTMLImageElement) => !node.hidden && node.complete && node.naturalWidth > 0), 'provided Cloak logo');
     const original = await layout(page), inventory = app.browser.inventory!;
     assert.ok(inventory.groups!.length >= 2, `Discover native groups: ${url}`);
     await page.evaluate(() => {
@@ -35,11 +41,14 @@ try {
       win.__nativeLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('main a[href],[role=main] a[href]')).map(a => ({ href: a.href, text: a.textContent }));
       win.__sample = Array.from(document.querySelectorAll<HTMLElement>('main p,[role=main] p')).find(n => { const size = parseFloat(getComputedStyle(n).fontSize); return size >= 12 && size <= 24 && n.textContent!.length > 8 && !n.closest('nav,[hidden]'); });
       win.__sampleSize = win.__sample ? parseFloat(getComputedStyle(win.__sample).fontSize) : null;
+      win.__originalDocumentWidth = document.documentElement.scrollWidth;
     });
     const profiles: any[] = [];
     for (const id of ['engineer', 'grandma']) {
       await action({ type: 'profile', id }); await action({ type: 'toggle', enabled: true });
       const plan = structuredClone(app.state().plan!), actual = await layout(page);
+      assert.equal(plan.presentation?.layout, id === 'grandma' ? 'guided' : 'compare', `Needs determine layout strategy: ${url}`);
+      assert.equal(actual.layout, plan.presentation!.layout, `Layout is applied to the actual page: ${url}`);
       assert.ok(actual.connected, 'All native registered nodes retain identity');
       for (const group of inventory.groups!) {
         const order = group.type === 'sections' ? plan.sectionOrder : group.type === 'categories' ? plan.categoryOrder : plan.sectionOrder.flatMap(id => plan.itemOrders[id]);
@@ -47,11 +56,21 @@ try {
       }
       assert.notDeepEqual(actual.groups, original.groups, `Page visibly restructures for ${id}: ${url}`);
       assert.equal(await page.evaluate(() => (window as any).__nativeSections.every((n: Node) => n.isConnected)), true);
+      const desktopGeometry = await gridGeometry(page);
+      if (inventory.groups!.some(group => group.type === 'items')) {
+        assert.ok(actual.grids > 0 && desktopGeometry.length > 0, `Native cards form actual visible grids: ${url}`);
+        assert.ok(desktopGeometry.some(grid => grid.columns === (id === 'grandma' ? 2 : 3) && grid.cards.length >= 2), `Native card geometry follows the selected layout: ${url}`);
+        for (const grid of desktopGeometry) for (const card of grid.cards) {
+          assert.ok(card.width > 40 && card.height > 0, `Native cards retain visible geometry: ${url}`);
+          assert.ok(card.left >= grid.left - 2 && card.right <= grid.right + 2, `Cards fit their native grid: ${url}`);
+        }
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= Math.max(window.innerWidth, (window as any).__originalDocumentWidth) + 1), `Personalization adds no document overflow: ${url}`);
       if (id === 'grandma') {
-        assert.deepEqual(plan.presentation, { reading: 'larger', density: 'focused' });
+        assert.deepEqual(plan.presentation, { reading: 'larger', density: 'focused', layout: 'guided', maxVisible: 2 });
         const size = await page.evaluate(() => { const w = window as any; return !w.__sample || parseFloat(getComputedStyle(w.__sample).fontSize) > w.__sampleSize; });
         assert.ok(size, `Larger body copy: ${url}`);
-        const disclosure = page.locator('[data-cloak-disclosure] button').first();
+        const disclosure = page.locator('[data-cloak-disclosure] button').filter({ visible: true }).first();
         if (await disclosure.count()) {
           const before = await page.locator('[hidden]').count(); await disclosure.click();
           assert.equal(await disclosure.getAttribute('aria-expanded'), 'true');
@@ -63,24 +82,32 @@ try {
           assert.equal(await page.getByRole('tab', { name: /^Laptops\b/ }).getAttribute('aria-selected'), 'true', 'Native product tabs work');
           await page.getByRole('tab', { name: /^All products\b/ }).click();
           const gallery = page.locator('div[class*="StickyFooterGallery_gallery__"]').filter({ visible: true }).first();
-          const viewport = gallery.locator('[data-rsc-scrollable]');
-          await gallery.getByRole('button', { name: /^Next/ }).click();
-          await until(async () => await viewport.evaluate(node => node.scrollLeft) > 20, 'native Mac lineup next button');
-          await page.waitForTimeout(700);
-          const scrolled = await viewport.evaluate(node => node.scrollLeft);
-          await gallery.getByRole('button', { name: /^Previous/ }).click();
-          await until(async () => await viewport.evaluate(node => node.scrollLeft) < scrolled, 'native Mac lineup previous button');
+          if (await gallery.locator('[data-cloak-grid]').count()) {
+            assert.equal(await gallery.getByRole('button', { name: /^Next/ }).isVisible(), false, 'Native paging is hidden while product choices form a grid');
+            assert.ok(await gallery.locator('[data-cloak-griditem]').count() >= 2, 'Native product choices remain in the layout');
+          }
         }
       }
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: `work/apple-${index}-${id}.png` });
       if (url.includes('/macbook-air/')) {
         const continuity = inventory.sections.find(section => section.title === 'Continuity')!;
+        if (!await page.locator('.section-continuity').isVisible()) {
+          const moreSections = page.getByRole('button', { name: /^Explore \d+ more sections$/ }).filter({ visible: true });
+          if (await moreSections.count()) await moreSections.first().click();
+        }
         await page.evaluate(id => (window as any).__cloak.find(id), continuity.id);
         await until(() => page.locator('.section-continuity picture').first().locator('img').evaluate((node: HTMLImageElement) => node.naturalWidth > 10 && !node.currentSrc.startsWith('data:')), 'native images load at their personalized location');
         await page.screenshot({ path: `work/apple-${index}-${id}-content.png` });
       }
-      profiles.push({ id, sections: plan.sectionOrder, groups: actual.groups, presentation: plan.presentation });
+      if (id === 'grandma' && desktopGeometry.length && ['https://www.apple.com/', 'https://www.apple.com/mac/', 'https://support.apple.com/'].includes(url)) {
+        await page.setViewportSize({ width: 390, height: 900 });
+        const mobileGeometry = await gridGeometry(page);
+        assert.ok(mobileGeometry.length > 0 && mobileGeometry.every(grid => grid.columns === 1), `Personalized native cards become one column on mobile: ${url}`);
+        for (const grid of mobileGeometry) for (const card of grid.cards) assert.ok(card.left >= -1 && card.right <= 391, `Native mobile cards fit the screen: ${url}`);
+        await page.setViewportSize({ width: 1440, height: 1050 });
+      }
+      profiles.push({ id, sections: plan.sectionOrder, groups: actual.groups, presentation: plan.presentation, geometry: desktopGeometry });
       await action({ type: 'toggle', enabled: false }, false);
       assert.deepEqual((await layout(page)).groups, original.groups, 'Exact original ordering after every profile');
       const linksRetained = await page.evaluate(() => {
@@ -88,6 +115,33 @@ try {
         return (window as any).__nativeLinks.every((old: any) => current.some(n => n.href === old.href && n.textContent === old.text));
       }); assert.ok(linksRetained, `Native links and copy preserved: ${url}`);
       assert.equal(await page.locator('[data-cloak-disclosure]').count(), 0);
+      assert.equal(await page.locator('[data-cloak-grid]').count(), 0, 'Original removes all transformed card grids');
+      if (id === 'grandma' && url === 'https://www.apple.com/mac/') {
+        // Apple defers the offscreen sticky footer with content-visibility. Visit
+        // the native gallery before looking for its accessible paging controls.
+        await page.locator('div[class*="StickyFooterGallery_gallery__"]').filter({ has: page.locator('button[aria-label^="Next"]') }).first().scrollIntoViewIfNeeded();
+        const gallery = page.locator('div[class*="StickyFooterGallery_gallery__"]').filter({ has: page.getByRole('button', { name: /^Next/ }) }).first();
+        try { await until(async () => await gallery.count() > 0, 'restored native Mac gallery exposes its paging controls', 5000); }
+        catch (error) {
+          await page.screenshot({ path: 'work/mac-restore-failure.png', fullPage: false });
+          await writeFile('work/mac-restore-failure.json', JSON.stringify(await page.evaluate(() => ({
+            scroll: window.scrollY,
+            tabs: Array.from(document.querySelectorAll('[role="tab"]')).map(node => ({ label: node.textContent, selected: node.getAttribute('aria-selected'), attrs: node.outerHTML.slice(0, 500) })),
+            galleries: Array.from(document.querySelectorAll('div[class*="StickyFooterGallery_gallery__"]')).map(node => ({
+              attrs: Array.from(node.attributes).map(attr => [attr.name, attr.value]),
+              box: { top: node.getBoundingClientRect().top, height: node.getBoundingClientRect().height },
+              ancestors: Array.from((function* () { let p = node.parentElement; for (let i = 0; p && i < 5; i++, p = p.parentElement) yield p; })()).map(parent => ({ tag: parent.tagName, class: parent.className, hidden: parent.hidden, ariaHidden: parent.getAttribute('aria-hidden'), display: getComputedStyle(parent).display })),
+              buttons: Array.from(node.querySelectorAll('button')).map(button => ({ label: button.getAttribute('aria-label'), attrs: Array.from(button.attributes).map(attr => [attr.name, attr.value]), display: getComputedStyle(button).display, visibility: getComputedStyle(button).visibility, box: { width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height }, ancestors: Array.from((function* () { let p = button.parentElement; for (let i = 0; p && i < 5; i++, p = p.parentElement) yield p; })()).map(parent => ({ attrs: Array.from(parent.attributes).map(attr => [attr.name, attr.value]), display: getComputedStyle(parent).display, visibility: getComputedStyle(parent).visibility, contentVisibility: getComputedStyle(parent).contentVisibility, box: { width: parent.getBoundingClientRect().width, height: parent.getBoundingClientRect().height } })) }))
+            }))
+          })), null, 2)); throw error;
+        }
+        const viewport = gallery.locator('[data-rsc-scrollable]');
+        await gallery.getByRole('button', { name: /^Next/ }).click();
+        await until(async () => await viewport.evaluate(node => node.scrollLeft) > 20, 'restored native Mac lineup next button');
+        await page.waitForTimeout(700); const scrolled = await viewport.evaluate(node => node.scrollLeft);
+        await gallery.getByRole('button', { name: /^Previous/ }).click();
+        await until(async () => await viewport.evaluate(node => node.scrollLeft) < scrolled, 'restored native Mac lineup previous button');
+      }
     }
     assert.notDeepEqual(profiles[0].groups, profiles[1].groups, 'Different people produce different native layouts');
     report.push({ url, items: inventory.items.length, groups: inventory.groups!.length, profiles });
