@@ -136,8 +136,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.locator('.rf-ccard-content-headerlink').filter({ hasText: /^MacBook\s+Pro\s*$/ }).first().click();
   await page.waitForURL(url => url.hostname === 'www.apple.com' && url.pathname.includes('/shop/buy-mac/'));
-  await waitFor(() => app.browser.stories.length === 0 && !app.state().busy, 'unmodified product configurator');
-  assert.equal(await page.locator('#cloak-controls').count(), 0);
+  await waitFor(() => app.browser.inventory?.mode === 'transaction' && !app.state().busy, 'native product configurator with persistent controls');
+  assert.equal(await page.locator('#cloak-controls').count(), 1);
+  assert.equal(app.browser.inventory?.groups?.some(group => group.type === 'items' || group.type === 'sections'), false, 'Configuration choices keep their original order');
   assert.deepEqual(pageErrors, [], 'No native JavaScript errors after restructuring and interaction');
   const report = { items: inventory.items.length, sections: inventory.sections.length, categories: inventory.categories.length, elapsedSeconds: Math.round((Date.now() - started) / 1000), engineering: { title: engineerPlan.intent.title, products: topItems.map(item => item.title), sections: engineerPlan.sectionOrder }, creative: { title: creativePlan.intent.title, products: creativeItems.map(item => item.title), sections: creativePlan.sectionOrder } };
   await writeFile('work/v2-verification.json', JSON.stringify(report, null, 2));

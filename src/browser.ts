@@ -4,6 +4,7 @@ import { installCloak } from './inject.ts';
 import { installAppleCloak } from './adapters/apple.ts';
 import { installDomEngine } from './engine/dom.ts';
 import { installCloakControls } from './controls.ts';
+import { installAppleContent } from './adapters/apple-content.ts';
 
 export class BrowserManager {
   context?: BrowserContext;
@@ -17,7 +18,7 @@ export class BrowserManager {
   private navigationVersion = 0;
   constructor(private directory: string, private getState: () => any, private onAction: (action: any) => Promise<void>, private onExtract: () => Promise<void>, private changed: () => void) {}
   static supported(url: string) {
-    try { const u = new URL(url); return u.protocol === 'https:' && (u.hostname === 'news.ycombinator.com' || (u.hostname === 'www.apple.com' && /^\/(?:[a-z]{2}\/)?store\/?$/.test(u.pathname))); } catch { return false; }
+    try { const u = new URL(url); return u.protocol === 'https:' && (u.hostname === 'news.ycombinator.com' || ['www.apple.com', 'apple.com', 'support.apple.com'].includes(u.hostname)); } catch { return false; }
   }
   private async launch() {
     if (this.context) return;
@@ -28,8 +29,9 @@ export class BrowserManager {
         args: ['--start-maximized']
       });
       this.context = context;
-      await context.exposeBinding('cloakAction', async ({ page }, action) => {
-        if (page !== this.page || !BrowserManager.supported(page.url())) throw new Error('This page is not the active Cloak page');
+      await context.exposeBinding('cloakAction', async ({ page, frame }, action) => {
+        if (frame !== page.mainFrame() || !BrowserManager.supported(page.url())) throw new Error('This page is not an Apple page');
+        if (page !== this.page) await this.read(page);
         await this.onAction(action);
       });
       context.on('page', page => this.attach(page));
@@ -41,11 +43,25 @@ export class BrowserManager {
   private attach(page: Page) {
     if (this.attached.has(page)) return;
     this.attached.add(page);
-    page.on('framenavigated', frame => { if (frame === page.mainFrame()) this.reading.delete(page); });
+    page.on('framenavigated', frame => {
+      if (frame !== page.mainFrame()) return;
+      this.reading.delete(page);
+      if (page === this.page) { this.inventory = undefined; this.stories = []; this.url = page.url(); this.navigationVersion++; this.changed(); }
+    });
     page.on('domcontentloaded', () => { void this.read(page).catch(error => console.error('Page extraction:', error.message)); });
     page.on('close', () => {
       if (this.page === page) { this.page = undefined; this.stories = []; this.inventory = undefined; this.url = ''; this.site = ''; this.navigationVersion++; this.changed(); }
     });
+    let checking = false;
+    const timer = setInterval(async () => {
+      if (checking || this.reading.get(page)?.pending || page.isClosed() || !BrowserManager.supported(page.url())) return;
+      checking = true;
+      try {
+        const refresh = await page.evaluate(() => document.readyState !== 'loading' && (!(window as any).__cloak || (window as any).__cloak.inventory.url !== location.href || (window as any).__cloakAdapter?.stale?.()));
+        if (refresh) { this.reading.delete(page); await this.read(page); }
+      } catch { /* Document navigation is retried on the next tick. */ }
+      finally { checking = false; }
+    }, 1500); timer.unref(); page.once('close', () => clearInterval(timer));
   }
   async open(target: 'hn' | 'apple') {
     await this.launch();
@@ -57,13 +73,15 @@ export class BrowserManager {
     // The navigation event owns extraction; wait for it before returning from launch.
     await this.read(page);
   }
-  private reading = new WeakMap<Page, { url: string; promise: Promise<void> }>();
+  private reading = new WeakMap<Page, { url: string; promise: Promise<void>; pending: boolean }>();
   read(page: Page): Promise<void> {
     const url = page.url();
     const existing = this.reading.get(page);
     if (existing?.url === url) return existing.promise;
     const promise = this.readPage(page, url);
-    this.reading.set(page, { url, promise });
+    const entry = { url, promise, pending: true };
+    this.reading.set(page, entry);
+    void promise.then(() => { entry.pending = false; }, () => { entry.pending = false; this.reading.delete(page); });
     return promise;
   }
   private async readPage(page: Page, url: string) {
@@ -76,13 +94,22 @@ export class BrowserManager {
     // tsx names nested functions using __name; supply the helper in the page realm.
     await page.evaluate(() => { (window as any).__name = (value: unknown) => value; });
     if (url.includes('apple.com')) {
-      // Let the native store finish hydration before registering movable groups.
-      await page.waitForFunction(() => {
+      const isStore = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?store\/?$/.test(new URL(url).pathname);
+      await page.waitForSelector('main,[role="main"],.main', { timeout: 15000 });
+      if (isStore) await page.waitForFunction(() => {
         const items = Array.from(document.querySelectorAll('.rf-cards-scroller-itemview'));
         return items.length > 0 && items.every(item => item.parentElement?.hasAttribute('data-core-scroller-item'));
       }, undefined, { timeout: 15000 });
+      else await page.waitForTimeout(900);
+      if (version !== this.navigationVersion || page.url() !== url) return;
+      await page.evaluate(() => {
+        if ((window as any).__cloakAdapter && ((window as any).__cloakAdapter.stale?.() || (window as any).__cloakAdapter.inventory.url !== location.href)) {
+          (window as any).__cloakDom?.destroy(); document.getElementById('cloak-controls')?.remove();
+          delete (window as any).__cloak; delete (window as any).__cloakAdapter; delete (window as any).__cloakDom;
+        }
+      });
       await page.evaluate(installDomEngine);
-      await page.evaluate(installAppleCloak);
+      await page.evaluate(isStore ? installAppleCloak : installAppleContent);
       await page.evaluate(installCloakControls);
     } else await page.evaluate(installCloak);
     const stories = await page.evaluate(() => (window as any).__cloak.extract()) as Story[];
@@ -90,8 +117,9 @@ export class BrowserManager {
     this.stories = stories;
     this.inventory = await page.evaluate(() => (window as any).__cloak.inventory) as PageInventory | undefined;
     this.url = url;
-    this.site = url.includes('apple.com') ? 'Apple Store' : 'Hacker News';
+    this.site = url.includes('apple.com') ? await page.title() : 'Hacker News';
     this.changed();
+    await this.update();
     await this.onExtract();
   }
   async update() {

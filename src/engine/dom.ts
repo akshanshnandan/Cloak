@@ -8,6 +8,10 @@ export function installDomEngine() {
   const scroll = new Map<HTMLElement, number>();
   const buttons = new Map<HTMLButtonElement, { disabled: boolean; aria: string | null }>();
   const pagers: { root: HTMLElement; viewport: HTMLElement }[] = [];
+  const abort = new AbortController(), observers: MutationObserver[] = [];
+  const presentation = new Map<HTMLElement, string | null>();
+  const hidden = new Map<HTMLElement, boolean>();
+  const disclosures: HTMLElement[] = [];
   let savedWindow = { x: 0, y: 0 }, active = false;
   function register(id: string, entries: { id: string; node: HTMLElement }[]) {
     if (!entries.length || groups.has(id)) return;
@@ -27,11 +31,12 @@ export function installDomEngine() {
     if (!node || texts.has(id)) return;
     const entry = { node, children: Array.from(node.childNodes), scope, selector };
     texts.set(id, entry);
-    new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       const expected = expectedLabels.get(id);
       const current = target(entry);
       if (active && expected !== undefined && current.textContent !== expected) current.textContent = expected;
-    }).observe(scope || node, { childList: true, characterData: true, subtree: true });
+    });
+    observer.observe(scope || node, { childList: true, characterData: true, subtree: true }); observers.push(observer);
   }
   function capture(scrollers: HTMLElement[]) {
     if (active) return;
@@ -59,14 +64,46 @@ export function installDomEngine() {
       // Keep their exact buttons and scroll surface, but page through the new DOM order.
       event.preventDefault(); event.stopImmediatePropagation();
       viewport.scrollBy({ left: step * Math.max(250, viewport.clientWidth - 100), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    }, true);
-    viewport.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
-    window.addEventListener('resize', () => requestAnimationFrame(sync), { passive: true });
+    }, { capture: true, signal: abort.signal });
+    viewport.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true, signal: abort.signal });
+    window.addEventListener('resize', () => requestAnimationFrame(sync), { passive: true, signal: abort.signal });
+  }
+  function clearPresentation() {
+    presentation.forEach((style, node) => { if (style === null) { node.style.cssText = ''; node.getAttribute('style'); node.removeAttribute('style'); } else node.setAttribute('style', style); }); presentation.clear();
+    hidden.forEach((value, node) => { node.hidden = value; }); hidden.clear();
+    disclosures.splice(0).forEach(node => node.remove());
+  }
+  function present(options: { reading?: string; density?: string }, focusGroups: { nodes: HTMLElement[]; parent: HTMLElement }[] = []) {
+    clearPresentation();
+    if (options?.reading === 'larger') {
+      const main = document.querySelector<HTMLElement>('main,[role="main"],.main');
+      main?.querySelectorAll<HTMLElement>('p,[class*="description"],[class*="desccontent"],[class*="descprice"]').forEach(node => {
+        if (node.closest('nav,footer,[hidden],noscript,script,style') || node.querySelector('p,[class*="description"]')) return;
+        const computed = getComputedStyle(node), size = parseFloat(computed.fontSize);
+        if (size < 12 || size > 24) return;
+        presentation.set(node, node.getAttribute('style'));
+        node.style.setProperty('font-size', `${Math.round(size * 1.18 * 10) / 10}px`, 'important');
+        node.style.setProperty('line-height', '1.55', 'important');
+      });
+    }
+    if (options?.density === 'focused') focusGroups.forEach(({ nodes, parent }) => {
+      if (nodes.length <= 4) return;
+      const rest = nodes.slice(4).filter(node => !node.hidden && !node.querySelector('input,select,textarea,form,[role="tab"]') && !node.closest('.tabnav-gallery'));
+      if (!rest.length) return;
+      rest.forEach(node => { hidden.set(node, node.hidden); presentation.set(node, node.getAttribute('style')); node.hidden = true; node.style.setProperty('display', 'none', 'important'); });
+      const row = document.createElement('div'), button = document.createElement('button');
+      row.dataset.cloakDisclosure = 'true'; row.style.cssText = 'padding:18px 24px;text-align:center;';
+      button.type = 'button'; button.textContent = `Show ${rest.length} more`; button.setAttribute('aria-expanded', 'false');
+      button.style.cssText = 'font:400 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:inherit;background:transparent;border:1px solid currentColor;border-radius:22px;padding:9px 20px;cursor:pointer;';
+      button.onclick = () => { const expand = button.getAttribute('aria-expanded') === 'false'; rest.forEach(node => { node.hidden = !expand; const style = presentation.get(node); if (style === null) node.removeAttribute('style'); else if (style !== undefined) node.setAttribute('style', style); if (!expand) node.style.setProperty('display', 'none', 'important'); }); button.setAttribute('aria-expanded', String(expand)); button.textContent = expand ? 'Show fewer' : `Show ${rest.length} more`; window.dispatchEvent(new Event('resize')); };
+      row.append(button); parent.after(row); disclosures.push(row);
+    });
   }
   function restore(positions = true) {
     expectedLabels.clear();
+    clearPresentation();
     // Parent lists first, followed by their native item lists.
-    for (const [id, group] of groups) reorder(id, group.ids);
+    for (const [id, group] of groups) if (group.nodes.every(node => node.isConnected) && group.slots.every(slot => slot.isConnected)) reorder(id, group.ids);
     for (const entry of texts.values()) target(entry).replaceChildren(...entry.children);
     if (positions && active) {
       scroll.forEach((left, node) => node.scrollTo({ left, behavior: 'instant' }));
@@ -87,6 +124,7 @@ export function installDomEngine() {
       labels.forEach(label => { expectedLabels.set(label.id, label.text); target(texts.get(label.id)!).textContent = label.text; });
     } catch (error) { restore(); throw error; }
   }
-  win.__cloakDom = { register, registerText, registerPager, capture, apply, restore,
+  win.__cloakDom = { register, registerText, registerPager, capture, apply, restore, present,
+    destroy: () => { restore(); abort.abort(); observers.forEach(observer => observer.disconnect()); },
     diagnostics: () => Object.fromEntries([...groups].map(([id, group]) => [id, group.ids.map((id, i) => ({ id, connected: group.nodes[i].isConnected, slot: group.slots[i].isConnected }))])) };
 }

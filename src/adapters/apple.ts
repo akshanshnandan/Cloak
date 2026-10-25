@@ -33,11 +33,11 @@ export function installAppleCloak() {
   const categoryNodes = Array.from(document.querySelectorAll<HTMLElement>('.rs-productnav-cardsshelf .rf-cards-scroller-itemview')).map(item => item.closest<HTMLElement>('[data-core-scroller-item]') || item);
   const categories = categoryNodes.map((node, index) => ({ id: `category-${index}`, node, title: clean(node.querySelector('.rf-productnav-card-title')?.textContent), url: node.querySelector<HTMLAnchorElement>('a')?.href || '', originalIndex: index }));
   engine.register('categories', categories.map(category => ({ id: category.id, node: category.node })));
-  const globalNavigation = Array.from(document.querySelectorAll<HTMLElement>('#globalnav .globalnav-list > .globalnav-item-menu'));
+  const globalNavigation = Array.from(document.querySelectorAll<HTMLElement>('#globalnav .globalnav-menu-list > .globalnav-item-menu'));
   const menus = globalNavigation.map((node, index) => ({ id: `menu-${index}`, node, title: clean(node.querySelector('.globalnav-link-text')?.textContent || node.querySelector('.globalnav-link')?.getAttribute('aria-label')) }));
   if (menus.length && menus.every(menu => menu.node.parentNode === menus[0].node.parentNode)) engine.register('navigation', menus);
   const primarySectionId = [...sections].sort((a, b) => b.itemIds.filter(id => items.find(item => item.id === id)?.story.kind === 'product').length - a.itemIds.filter(id => items.find(item => item.id === id)?.story.kind === 'product').length)[0]?.id || '';
-  const inventory = { url: location.href, primarySectionId, sections: sections.map(({ node, ...section }) => section), categories: categories.map(({ node, ...category }) => category), items: items.map(item => item.story) };
+  const inventory = { url: location.href, mode: 'store', primarySectionId, sections: sections.map(({ node, ...section }) => section), categories: categories.map(({ node, ...category }) => category), items: items.map(item => item.story) };
   const scrollers = Array.from(document.querySelectorAll<HTMLElement>('.rf-cards-scroller-content'));
   scrollers.forEach(viewport => { const root = viewport.closest<HTMLElement>('.rf-cards-scroller'); if (root) engine.registerPager(root, viewport); });
   let currentPlan = '', resetVersion = 0, active = false;
@@ -55,6 +55,7 @@ export function installAppleCloak() {
     }
     engine.capture(scrollers);
     engine.apply(operations, [{ id: `heading:${primarySectionId}`, text: plan.collection.title.replace(/[.!?]+$/, '') + '.' }, { id: `subheading:${primarySectionId}`, text: '\u00a0Selected for you.' }]);
+    engine.present(plan.presentation, sections.map(section => { const ordered = plan.itemOrders[section.id].map((id: string) => items.find(item => item.id === id)?.node).filter(Boolean); return { nodes: ordered, parent: ordered[0]?.parentElement }; }).filter(group => group.parent));
     currentPlan = plan.id; active = true;
     // DOM order is the personalization. Reset native scroll offsets so first really means first.
     const version = ++resetVersion;
@@ -62,7 +63,7 @@ export function installAppleCloak() {
     reset(); requestAnimationFrame(() => requestAnimationFrame(reset));
   }
   function find(id: string) { const entry = items.find(item => item.id === id); entry?.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); }
-  win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find,
+  win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find, stale: () => sections.some(section => !section.node.isConnected),
     diagnostics: () => ({ planId: currentPlan, sections: physicalOrder(sections), categories: physicalOrder(categories), itemOrders: Object.fromEntries(sections.map(section => [section.id, physicalOrder(items.filter(item => item.story.sectionId === section.id))])), connected: items.every(item => item.node.isConnected), engine: engine.diagnostics() }) };
   document.addEventListener('click', event => {
     if (!active || event.composedPath().some(node => node instanceof HTMLElement && node.id === 'cloak-controls')) return;

@@ -30,3 +30,17 @@ test('budget constraints outrank the model while retaining every native item', (
   assert.equal(plan.sectionOrder[1], 'offers');
   assert.deepEqual(completeOrder(['unknown', 'air', 'air'], ['pro', 'air']), ['air', 'pro']);
 });
+
+test('content pages prioritize relevant sections and honor explicit reading needs without an age assumption', () => {
+  const page = { ...inventory, mode: 'content' as const, categories: [] };
+  const decision = parseDecision(JSON.stringify({ title: 'Family and setup', query: 'Family calls', budget: null, products: [3], sections: [1, 0], categories: [], reading: 'standard', density: 'all' }), page);
+  const ranked = page.items.map(item => ({ ...item, score: .5, reason: '', movement: 0 }));
+  const source = { model: 'local', generatedAt: '', cached: false };
+  const grandma = defaults().profiles.find(profile => profile.id === 'grandma')!;
+  const plan = compilePlan(decision, page, ranked, grandma, source);
+  assert.deepEqual(plan.sectionOrder, ['offers', 'products']);
+  assert.equal(plan.presentation?.reading, 'larger'); assert.equal(plan.presentation?.density, 'focused');
+  const standard = compilePlan(decision, page, ranked, { ...grandma, description: 'I am a grandmother. I edit films.', reading: 'standard', density: 'all' }, source);
+  assert.deepEqual(standard.presentation, { reading: 'standard', density: 'all' });
+  assert.equal(plan.itemOrders.products[0], 'air', 'Affordable products precede expensive items');
+});

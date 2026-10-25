@@ -23,7 +23,7 @@ const planner = new LocalPlanner(path.join(root, '.cache'), () => broadcast());
 const browser = new BrowserManager(path.join(store.directory, 'browser'), state, action, rerank, broadcast);
 function state() {
   const currentPlan = plan && browser?.inventory && plan.inventoryKey === inventoryKey(browser.inventory) ? plan : null;
-  return { ...store.value, engineVersion: 2, model: model.status, modelName: MODEL, planner: planner.status, plannerName: PLANNER_MODEL, plan: currentPlan, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
+  return { ...store.value, engineVersion: 3, model: model.status, modelName: MODEL, planner: planner.status, plannerName: PLANNER_MODEL, plan: currentPlan, ranked, busy, error, browser: { connected: !!browser?.page && !browser.page.isClosed(), url: browser?.url || '', site: browser?.site || '', count: browser?.stories.length || 0 } };
 }
 function broadcast() {
   const data = `data: ${JSON.stringify(state())}\n\n`;
@@ -39,9 +39,20 @@ async function rerank() {
   busy = true; error = ''; broadcast();
   try {
     let result = await rankStories(model, stories, profile);
+    if (current !== revision) return;
     let nextPlan: PersonalizationPlan | null = null;
     if (inventory) {
-      const inference = await planner.decide(inventory, profile, result.map(item => item.id));
+      // Embeddings provide an immediate local rearrangement while Qwen reasons
+      // about the actual page. The final plan retains explicit model provenance.
+      if (!plan || plan.profileId !== profile.id || plan.inventoryKey !== inventoryKey(inventory)) {
+        const sectionRanking = await rankStories(model, inventory.sections.map(section => ({ ...section, url: inventory.url })), profile);
+        const categoryRanking = await rankStories(model, inventory.categories.map(category => ({ ...category, description: category.title })), profile);
+        if (current !== revision) return;
+        const preview = { title: 'Selected for you', query: profile.description, budget: profile.budget || null, products: result.slice(0, 4).map(item => stories.findIndex(story => story.id === item.id)), sections: sectionRanking.map(section => inventory.sections.findIndex(s => s.id === section.id)), categories: categoryRanking.map(category => inventory.categories.findIndex(c => c.id === category.id)) };
+        plan = compilePlan(preview, inventory, result, profile, { model: MODEL, generatedAt: new Date().toISOString(), cached: false }, Object.fromEntries(categoryRanking.map(category => [category.id, category.score])));
+        ranked = result; broadcast();
+      }
+      const inference = await planner.decide(inventory, profile, result.map(item => item.id), () => current === revision);
       if (current !== revision) return;
       const understood = { ...profile, description: profile.description + '\n' + inference.decision.query };
       result = await rankStories(model, stories, understood);
@@ -91,7 +102,9 @@ async function performAction(payload: any) {
       if (!Array.isArray(payload.interests) || payload.interests.length > 12) throw new Error('Use up to 12 interests');
       const interests = payload.interests.map((i: unknown) => text(i, 80, 'interest')).filter(Boolean);
       if (payload.budget !== undefined && payload.budget !== null && (!Number.isFinite(payload.budget) || payload.budget < 1 || payload.budget > 1000000)) throw new Error('Enter a valid maximum budget');
-      Object.assign(profile, { name, description, avoid, interests, ...(payload.budget !== undefined ? { budget: payload.budget } : {}) });
+      if (payload.reading !== undefined && !['auto', 'standard', 'larger'].includes(payload.reading)) throw new Error('Invalid reading preference');
+      if (payload.density !== undefined && !['auto', 'all', 'focused'].includes(payload.density)) throw new Error('Invalid choices preference');
+      Object.assign(profile, { name, description, avoid, interests, ...(payload.budget !== undefined ? { budget: payload.budget } : {}), ...(payload.reading !== undefined ? { reading: payload.reading } : {}), ...(payload.density !== undefined ? { density: payload.density } : {}) });
       await store.save(); void rerank(); break;
     }
     case 'create-profile': {
