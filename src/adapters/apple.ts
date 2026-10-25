@@ -34,7 +34,7 @@ export function installAppleCloak() {
   </section>`;
   document.documentElement.appendChild(host);
   const $ = (selector: string) => root.querySelector(selector) as HTMLElement;
-  let latest: any, badges: HTMLElement[] = [], pendingFocus = false, moved = false;
+  let latest: any, badges: HTMLElement[] = [], pendingFocus = false, moved = false, applied = '', focusRequest = 0;
   let savedScroll = { x: window.scrollX, y: window.scrollY };
   let scrollers: { node: HTMLElement; left: number }[] = [];
   async function action(payload: any) {
@@ -86,7 +86,7 @@ export function installAppleCloak() {
   function find(id: string) {
     const card = cards.find(c => c.story.id === id); if (!card) return;
     if (!scrollers.length) captureScroll();
-    moved = true;
+    moved = true; focusRequest++;
     card.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
   }
   function focusShelves(ranked: any[]) {
@@ -108,6 +108,22 @@ export function installAppleCloak() {
       }
     }
   }
+  function settleFocus(ranked: any[], signature: string) {
+    const request = ++focusRequest;
+    let checks = 0, stable = 0;
+    const check = () => {
+      if (request !== focusRequest || !latest?.enabled || applied !== signature) return;
+      const card = cards.find(c => c.story.id === ranked[0]?.id);
+      if (!card) return;
+      const bounds = card.node.getBoundingClientRect();
+      const visible = bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
+      if (!visible) { focusShelves(ranked); stable = 0; } else stable++;
+      // Apple can reset native scrollers while hydration or resize effects settle.
+      // This bounded check ends as soon as the target is stable, or the user interacts.
+      if (++checks < 8 && stable < 3) setTimeout(check, 120);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (request === focusRequest && latest?.enabled && applied === signature) { focusShelves(ranked); setTimeout(check, 120); } }));
+  }
   win.__cloak = {
     extract: () => cards.map(c => c.story), restore: () => restore(true), find,
     update: (state: any) => {
@@ -128,13 +144,18 @@ export function installAppleCloak() {
       $('#status').classList.toggle('error', !!state.error || state.model.phase === 'error'); $('#retry').hidden = state.model.phase !== 'error';
       $('#top-match').hidden = !enabled || !state.ranked.length || state.busy;
       if (state.ranked[0]) $('#top-match strong').textContent = state.ranked[0].title;
-      if (!enabled) { pendingFocus = false; restore(true); return; }
+      if (!enabled) { focusRequest++; pendingFocus = false; if (applied !== 'original') restore(true); applied = 'original'; return; }
       if (state.busy) return;
-      restore(); if (!ready) return;
+      if (!ready) return;
+      const signature = JSON.stringify([state.activeProfileId, state.ranked, state.profiles.find((p: any) => p.id === state.activeProfileId)?.feedback]);
+      if (signature === applied) return;
+      applied = signature;
+      restore();
       const top = state.ranked.slice(0, Math.min(5, Math.ceil(cards.length / 3)));
       top.forEach((story: any) => {
         const card = cards.find(c => c.story.id === story.id); if (!card) return;
         card.node.style.outline = '2px solid #86868b'; card.node.style.outlineOffset = '-2px'; card.node.style.position = 'relative';
+        card.node.style.borderRadius = getComputedStyle(card.node.querySelector('.rf-ccard-content') || card.node).borderRadius;
         const badge = document.createElement('div'); badge.dataset.cloakBadge = story.id;
         badge.style.cssText = 'position:absolute;right:14px;bottom:14px;z-index:3;';
         const shadow = badge.attachShadow({ mode: 'open' });
@@ -148,7 +169,10 @@ export function installAppleCloak() {
         badge.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
         card.node.appendChild(badge); badges.push(badge);
       });
-      if (pendingFocus && state.ranked.length) { focusShelves(state.ranked); pendingFocus = false; }
+      if (pendingFocus && state.ranked.length) {
+        pendingFocus = false;
+        settleFocus(state.ranked, signature);
+      }
     }
   };
   document.addEventListener('click', event => {
@@ -156,4 +180,10 @@ export function installAppleCloak() {
     const target = event.target instanceof Element ? event.target.closest('.rf-ccard') : null;
     const card = cards.find(c => c.node === target); if (card) void action({ type: 'open', id: card.story.id });
   }, { capture: true });
+  const stopFocusOnInteraction = (event: Event) => {
+    if (!event.composedPath().some(n => n instanceof HTMLElement && (n.dataset.cloakBadge || n.id === 'cloak-controls'))) focusRequest++;
+  };
+  document.addEventListener('pointerdown', stopFocusOnInteraction, { capture: true, passive: true });
+  document.addEventListener('wheel', stopFocusOnInteraction, { capture: true, passive: true });
+  document.addEventListener('keydown', event => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) stopFocusOnInteraction(event); }, { capture: true });
 }

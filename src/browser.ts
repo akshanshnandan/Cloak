@@ -80,7 +80,10 @@ export class BrowserManager {
     const page = this.page;
     if (!page || page.isClosed() || !BrowserManager.supported(page.url())) return;
     try { await page.evaluate(state => (window as any).__cloak?.update(state), this.getState()); }
-    catch (error) { if (!page.isClosed()) console.error('Page update:', (error as Error).message); }
+    catch (error) {
+      const message = (error as Error).message;
+      if (!page.isClosed() && !/Execution context was destroyed|Cannot find context|Target page, context or browser has been closed/.test(message)) console.error('Page update:', message);
+    }
   }
   async focus() { if (this.page && !this.page.isClosed()) await this.page.bringToFront(); }
   async find(id: string) {

@@ -47,10 +47,20 @@ try {
   await live.getByRole('button', { name: /Cloak this page/ }).click();
   await waitFor(async () => await live.locator('[data-cloak-badge]').count() > 0, 'Cloak applied through the floating control');
   assert.ok(await live.locator('[data-cloak-badge]').count() > 0);
+  const topId = app.state().ranked[0].id;
+  const topCard = live.locator(`.rf-ccard:has([data-cloak-badge="${topId}"])`);
+  await waitFor(async () => topCard.evaluate(node => { const b = node.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight; }), 'top recommendation is visible on the real page');
+  await live.waitForTimeout(500);
+  assert.equal(await topCard.evaluate(node => { const b = node.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }), true, 'The native carousel must keep the recommendation in view after settling');
   const overlayAudit = await new AxeBuilder({ page: live }).include('#cloak-controls').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   assert.deepEqual(overlayAudit.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) })), [], 'Floating control accessibility audit');
   await page.screenshot({ path: 'work/verified-dashboard.png', fullPage: true });
   await live.screenshot({ path: 'work/verified-apple.png' });
+  // Locate the actual scroller wrapper without assuming a particular carousel title.
+  const scrollBeforeNativeClick = await topCard.evaluate(node => node.closest('.rf-cards-scroller-content')!.scrollLeft);
+  const previous = live.locator('.rf-cards-scroller').filter({ has: topCard }).getByRole('button', { name: /Previous/ }).first();
+  await previous.click();
+  await waitFor(async () => topCard.evaluate((node, left) => node.closest('.rf-cards-scroller-content')!.scrollLeft < left - 20, scrollBeforeNativeClick), 'native Apple previous button remains functional');
   await request({ type: 'profile', id: 'lifestyle' });
   const lifestyle = app.state().ranked.slice(0, 5).map(s => s.title);
   console.log('Active lifestyle recommendations:', lifestyle);
@@ -100,6 +110,12 @@ try {
   const rejected = await fetch(`${base}/api/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://untrusted.example' }, body: JSON.stringify({ type: 'toggle', enabled: false }) });
   assert.equal(rejected.status, 403);
   assert.deepEqual(errors, []);
+  await request({ type: 'profile', id: 'engineer' });
+  await request({ type: 'toggle', enabled: true });
+  await live.locator('.rf-ccard-content-headerlink').filter({ hasText: /^MacBook\s+Pro\s*$/ }).first().click();
+  await live.waitForURL(url => url.hostname === 'www.apple.com' && url.pathname.includes('/shop/buy-mac/'), { timeout: 45000 });
+  await waitFor(() => app.state().browser.count === 0 && !app.state().busy, 'product navigation returns to the unmodified original page');
+  assert.equal(await live.locator('#cloak-controls').count(), 0, 'Product configurators remain original');
   console.log(`PASS: ${count} real Apple cards; model ranking, profile differences, feedback, native nodes, undo, persistence, dialogs, responsive layout and local API origin checks.`);
 } finally {
   await ui?.close(); await app.browser.close();

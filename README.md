@@ -6,6 +6,12 @@ Cloak is an open-source, local AI layer that adapts the **real Apple Store** to 
 
 There is no recreated storefront, extension, hosted proxy, API key or cloud LLM. Playwright opens `https://www.apple.com/store` in a visible Chromium window. Cloak adds a small, monochrome control to that document.
 
+| Original Apple Store | Cloaked for an engineering student |
+| --- | --- |
+| ![Real Apple Store before personalization](docs/images/apple-original.png) | ![The same live store focusing on relevant Macs](docs/images/apple-cloaked.png) |
+
+Screenshots from the live browser verification. Products and store content will change over time.
+
 ## Run it
 
 Requires **Node.js 22 or newer** and an internet connection for the store and the initial model download.
@@ -63,7 +69,7 @@ npm test                  # Persistence, ranking and host restrictions
 npm run test:integration  # Live Apple + real model + browser verification
 ```
 
-Integration tests use a separate profile directory and port 4318. They verify the original-first flow, distinct semantic rankings, feedback from the live page, settings on Apple, native node identity, undo and scroll restoration, persisted feedback, keyboard dismissal, responsive layouts and accessibility audits of Cloak’s UI. They require access to Apple and Hugging Face on the first run.
+Integration tests use a separate profile directory and port 4318. They verify the original-first flow, distinct semantic rankings, visible top recommendations, working native carousel buttons and product links, feedback from the live page, settings on Apple, native node identity, undo and scroll restoration, persisted feedback, keyboard dismissal, responsive layouts and accessibility audits of Cloak’s UI. They require access to Apple and Hugging Face on the first run.
 
 ## Data and design
 
