@@ -54,7 +54,7 @@ async function performAction(payload: any) {
     case 'profile': {
       if (!store.value.profiles.some(p => p.id === payload.id)) throw new Error('Profile not found');
       store.value.activeProfileId = payload.id;
-      await store.save(); await rerank(); break;
+      await store.save(); void rerank(); break;
     }
     case 'toggle': {
       if (typeof payload.enabled !== 'boolean') throw new Error('Invalid toggle');
@@ -68,14 +68,14 @@ async function performAction(payload: any) {
       if (!Array.isArray(payload.interests) || payload.interests.length > 12) throw new Error('Use up to 12 interests');
       const interests = payload.interests.map((i: unknown) => text(i, 80, 'interest')).filter(Boolean);
       Object.assign(profile, { name, description, avoid, interests });
-      await store.save(); await rerank(); break;
+      await store.save(); void rerank(); break;
     }
     case 'create-profile': {
       if (store.value.profiles.length >= 10) throw new Error('You can save up to 10 profiles');
       const id = crypto.randomUUID();
       store.value.profiles.push({ id, name: 'My profile', description: 'I like learning new things and discovering useful ideas.', interests: [], avoid: '', feedback: [] });
       store.value.activeProfileId = id;
-      await store.save(); await rerank(); break;
+      await store.save(); void rerank(); break;
     }
     case 'feedback': case 'open': {
       const story = browser.stories.find(s => s.id === payload.id);
@@ -86,9 +86,13 @@ async function performAction(payload: any) {
       store.active.feedback = store.active.feedback.filter(f => f.id !== story.id);
       store.active.feedback.push({ id: story.id, title: story.title, value: payload.type === 'open' ? 1 : payload.value, at: new Date().toISOString(), strength: payload.type === 'open' ? 0.25 : 1 });
       store.active.feedback = store.active.feedback.slice(-60);
-      await store.save(); await rerank(); break;
+      await store.save(); void rerank(); break;
     }
-    case 'clear-feedback': store.active.feedback = []; await store.save(); await rerank(); break;
+    case 'clear-feedback': store.active.feedback = []; await store.save(); void rerank(); break;
+    case 'find': {
+      if (!browser.stories.some(s => s.id === payload.id)) throw new Error('That item is no longer on this page');
+      await browser.find(payload.id); break;
+    }
     case 'retry-model': await model.load(); await rerank(); break;
     default: throw new Error('Unknown action');
   }
@@ -119,7 +123,7 @@ app.post('/api/action', async (req, res) => {
 let launching = false;
 app.post('/api/browser', async (req, res) => {
   if (launching) return res.status(409).json({ error: 'The browser is already opening' });
-  if (!['hn', 'wikipedia', 'focus'].includes(req.body.target)) return res.status(400).json({ error: 'Choose Hacker News or Wikipedia' });
+  if (!['hn', 'apple', 'focus'].includes(req.body.target)) return res.status(400).json({ error: 'Choose Apple Store' });
   launching = true; error = ''; broadcast();
   try {
     if (req.body.target === 'focus') await browser.focus(); else await browser.open(req.body.target);

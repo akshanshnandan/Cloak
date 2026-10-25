@@ -1,6 +1,7 @@
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import type { Story } from './types.ts';
 import { installCloak } from './inject.ts';
+import { installAppleCloak } from './apple.ts';
 
 export class BrowserManager {
   context?: BrowserContext;
@@ -13,7 +14,7 @@ export class BrowserManager {
   private navigationVersion = 0;
   constructor(private directory: string, private getState: () => any, private onAction: (action: any) => Promise<void>, private onExtract: () => Promise<void>, private changed: () => void) {}
   static supported(url: string) {
-    try { const u = new URL(url); return u.protocol === 'https:' && (u.hostname === 'news.ycombinator.com' || (u.hostname === 'en.wikipedia.org' && u.pathname.startsWith('/wiki/'))); } catch { return false; }
+    try { const u = new URL(url); return u.protocol === 'https:' && (u.hostname === 'news.ycombinator.com' || (u.hostname === 'www.apple.com' && /^\/(?:[a-z]{2}\/)?store\/?$/.test(u.pathname))); } catch { return false; }
   }
   private async launch() {
     if (this.context) return;
@@ -43,9 +44,9 @@ export class BrowserManager {
       if (this.page === page) { this.page = undefined; this.stories = []; this.url = ''; this.site = ''; this.navigationVersion++; this.changed(); }
     });
   }
-  async open(target: 'hn' | 'wikipedia') {
+  async open(target: 'hn' | 'apple') {
     await this.launch();
-    const url = target === 'hn' ? 'https://news.ycombinator.com/' : 'https://en.wikipedia.org/wiki/Artificial_intelligence';
+    const url = target === 'hn' ? 'https://news.ycombinator.com/' : 'https://www.apple.com/store';
     const page = this.page && !this.page.isClosed() ? this.page : this.context!.pages()[0] || await this.context!.newPage();
     this.page = page;
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -59,17 +60,19 @@ export class BrowserManager {
     if (this.reading.get(page) === url) return;
     this.reading.set(page, url);
     if (!BrowserManager.supported(url)) {
-      if (page === this.page) { this.stories = []; this.url = url; this.site = 'Unsupported page'; this.navigationVersion++; this.changed(); }
+      if (page === this.page) { this.stories = []; this.url = url; this.site = 'Browsing original website'; this.navigationVersion++; await this.onExtract(); }
       return;
     }
     this.page = page;
     const version = ++this.navigationVersion;
-    await page.evaluate(installCloak);
+    // tsx names nested functions using __name; supply the helper in the page realm.
+    await page.evaluate(() => { (window as any).__name = (value: unknown) => value; });
+    await page.evaluate(url.includes('apple.com') ? installAppleCloak : installCloak);
     const stories = await page.evaluate(() => (window as any).__cloak.extract()) as Story[];
     if (version !== this.navigationVersion || page.url() !== url) return;
     this.stories = stories;
     this.url = url;
-    this.site = url.includes('wikipedia.org') ? 'Wikipedia' : 'Hacker News';
+    this.site = url.includes('apple.com') ? 'Apple Store' : 'Hacker News';
     this.changed();
     await this.onExtract();
   }
@@ -80,5 +83,10 @@ export class BrowserManager {
     catch (error) { if (!page.isClosed()) console.error('Page update:', (error as Error).message); }
   }
   async focus() { if (this.page && !this.page.isClosed()) await this.page.bringToFront(); }
+  async find(id: string) {
+    if (!this.page || !BrowserManager.supported(this.page.url())) throw new Error('Open the Apple Store first');
+    await this.page.evaluate(id => (window as any).__cloak?.find?.(id), id);
+    await this.page.bringToFront();
+  }
   async close() { await this.context?.close(); }
 }

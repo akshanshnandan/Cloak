@@ -35,6 +35,6 @@ test('semantic feedback changes ranking and ties remain stable', async () => {
 
 test('adaptation is restricted to tested HTTPS hosts', () => {
   assert.equal(BrowserManager.supported('https://news.ycombinator.com/newest'), true);
-  assert.equal(BrowserManager.supported('https://en.wikipedia.org/wiki/Robotics'), true);
-  for (const url of ['http://news.ycombinator.com', 'https://news.ycombinator.com.evil.test', 'file:///C:/private', 'https://example.com', 'https://en.wikipedia.org/w/index.php']) assert.equal(BrowserManager.supported(url), false);
+  assert.equal(BrowserManager.supported('https://www.apple.com/store'), true);
+  for (const url of ['http://news.ycombinator.com', 'https://news.ycombinator.com.evil.test', 'file:///C:/private', 'https://example.com', 'https://www.apple.com/shop/bag', 'https://www.apple.com.evil.test/store']) assert.equal(BrowserManager.supported(url), false);
 });

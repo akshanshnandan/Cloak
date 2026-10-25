@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f5f7"><meta name="description" content="Cloak makes the internet personal. Local AI. Familiar websites. A little more you.">
+  <title>Cloak — Your internet. Your way.</title>
+  <link rel="icon" href="/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14M9 4H4v16h16v-5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h5m5 0h6M4 17h10m5 0h1"/><circle cx="11" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8 4 3 9l5 5M3 9h10a7 7 0 0 1 0 14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path d="M16.7 12.8c0-2.4 2-3.5 2.1-3.6-1.2-1.7-3-1.9-3.6-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.9-3.1-.8C6.8 7.4 5.3 8.4 4.5 10c-1.7 3-.4 7.5 1.3 10 .8 1.2 1.7 2.4 3 2.3 1.2 0 1.7-.8 3.2-.8s2 .8 3.3.8c1.3 0 2.1-1.2 2.9-2.3 1-1.4 1.4-2.7 1.4-2.8-.1 0-2.9-1.1-2.9-4.4ZM14.2 5.7c.7-.9 1.3-2.1 1.2-3.3-1.1.1-2.4.7-3.2 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.4-.6 3.1-1.5Z"/></symbol>
+</defs></svg>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar"><div class="nav-inner">
+  <a class="brand" href="/" aria-label="Cloak home"><img src="/mark.svg" alt="" width="25" height="29">cloak<span class="prototype">preview</span></a>
+  <nav aria-label="Main navigation"><a class="nav-link selected" href="#main">Overview</a><button class="nav-link" data-edit>Profiles</button><button class="nav-link" id="how-button">How it works</button></nav>
+  <div class="nav-right"><span class="model-pill" id="model-pill"><span class="status-dot"></span><span id="model-label">Starting local AI</span></span><a class="github" href="https://github.com/akshanshnandan/Cloak" target="_blank" rel="noreferrer" aria-label="Cloak on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.6.2-3.3 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.6 4.7 18.6 5 18.6 5c.7 1.7.3 3 .2 3.3.7.8 1.2 1.8 1.2 3.1 0 4.4-2.8 5.4-5.5 5.7.4.4.8 1.1.8 2.2v3.1c0 .3.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg></a></div>
+</div></header>
+<main id="main" class="workspace">
+  <section class="page-heading"><div><p class="eyebrow">YOUR PERSONAL INTERNET</p><h1>A little more you.</h1><p class="heading-copy">The websites you know. An experience that knows you.</p></div><div class="view-control"><span class="control-caption">Personalization</span><button id="power-toggle" class="toggle" role="switch" aria-checked="true" aria-label="Personalization"><span></span></button></div></section>
+  <div class="error-banner" id="error-banner" role="alert" hidden><span id="error-message"></span><button id="retry-model" hidden>Retry model</button><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
+  <section class="intro-grid" aria-label="Your workspace">
+    <div class="hero">
+      <div class="hero-top"><span class="overline">MEET YOUR INTERNET, AGAIN.</span><span class="hero-label"><span></span> Made personal</span></div>
+      <div class="hero-copy"><h2>Same internet.<br>Different perspective.</h2><p>Less searching. More finding.<br>Let what matters to you come into focus.</p><button class="button button-white launch-button" id="launch"><span>Explore Apple with Cloak</span><svg><use href="#i-arrow"/></svg></button><p class="hero-footnote" id="launch-note">Opens the real Apple Store in a new browser window.</p></div>
+      <div class="lens-art" aria-hidden="true"><div class="lens lens-back"></div><div class="lens lens-front"><div class="lens-core"></div></div><span class="art-star">✦</span></div>
+    </div>
+    <aside class="profile-card" aria-labelledby="profile-title">
+      <div class="card-heading"><span class="eyebrow">YOUR LENS</span><button class="text-button" data-edit>Edit profile <svg><use href="#i-sliders"/></svg></button></div>
+      <div class="persona-heading"><div class="avatar" id="profile-avatar"><svg><use href="#i-code"/></svg></div><div><h2 id="profile-title">Engineering student</h2><p>A perspective of your own.</p></div></div>
+      <label class="visually-hidden" for="profile-select">Switch your profile</label><select id="profile-select" class="profile-select" aria-label="Switch profile"></select>
+      <p class="profile-description" id="profile-description"></p><div class="interest-chips" id="interest-chips" aria-label="Your interests"></div>
+      <div class="profile-bottom"><span><svg><use href="#i-shield"/></svg> Saved on this device</span><button class="text-button" id="new-profile">New profile <span>+</span></button></div>
+    </aside>
+  </section>
+  <section class="results-section" aria-labelledby="results-title">
+    <div class="section-heading"><div><p class="eyebrow" id="results-eyebrow">A NEW POINT OF VIEW</p><h2 id="results-title">Your world, in focus.</h2></div><div class="segmented" role="group" aria-label="Results view"><button id="view-personal" class="active" aria-pressed="true">For you</button><button id="view-original" aria-pressed="false">Original</button></div></div>
+    <div class="results-grid"><div class="results-card">
+      <div class="results-toolbar"><div><span class="site-icon"><svg><use href="#i-apple"/></svg></span><strong>Apple Store</strong><span class="site-url">apple.com/store</span></div><button class="text-button" id="focus-browser" hidden>Open window <svg><use href="#i-external"/></svg></button><span class="connection-label" id="connection-label">Ready when you are</span></div>
+      <div id="results-body"><div class="empty-state"><div class="empty-icon"><svg><use href="#i-spark"/></svg></div><h3>There’s a whole internet out there.</h3><p>Open Apple to see what your perspective brings into focus.<br>Real products. Your priorities. The original website.</p><button class="button button-black launch-button" id="launch-empty">Let’s explore <svg><use href="#i-arrow"/></svg></button></div></div>
+      <div class="results-footer"><span><svg><use href="#i-shield"/></svg> Original design preserved</span><span id="result-count">Your experience starts here</span></div>
+    </div>
+    <aside class="insight-card"><span class="eyebrow">THOUGHTFULLY PERSONAL</span><h3>It gets you.<br>A little better, every time.</h3><p>A small signal makes a difference. Tell Cloak what you like, and your next recommendations learn from it.</p><div class="learning-stat"><strong id="feedback-count">0</strong><span>saved signals<br><small>from your feedback &amp; opens</small></span><svg><use href="#i-spark"/></svg></div><button class="text-button" id="manage-feedback">View learning history <svg><use href="#i-arrow"/></svg></button><div class="local-note"><svg><use href="#i-shield"/></svg><p><strong>Personal stays personal.</strong><br>Your preferences and AI processing stay on this device.</p></div></aside></div>
+  </section>
+  <section class="principles" aria-label="Cloak principles"><div><svg><use href="#i-spark"/></svg><h3>Made for your mind.</h3><p>AI that understands your interests,<br>not just the words you type.</p></div><div><svg><use href="#i-undo"/></svg><h3>Always your choice.</h3><p>One switch brings the original<br>website right back.</p></div><div><svg><use href="#i-code"/></svg><h3>Open by nature.</h3><p>Open-source code. Local intelligence.<br>A more personal internet for everyone.</p></div></section>
+  <footer class="footer"><a class="brand small" href="/"><img src="/mark.svg" width="17" height="20" alt="">cloak</a><span>Your internet. Your way.</span><a href="https://github.com/akshanshnandan/Cloak" target="_blank" rel="noreferrer">Built in the open <svg><use href="#i-external"/></svg></a></footer>
+</main>
+<dialog id="profile-dialog" aria-labelledby="edit-title"><form id="profile-form"><div class="dialog-heading"><div><p class="eyebrow">A PERSPECTIVE OF YOUR OWN</p><h2 id="edit-title">Make it yours.</h2></div><button type="button" class="icon-button close-dialog" aria-label="Close profile editor"><svg><use href="#i-close"/></svg></button></div><p class="dialog-copy">Tell Cloak what matters. A little context goes a long way.</p><label for="edit-name">Profile name</label><input id="edit-name" name="name" maxlength="60" required autocomplete="off"><label for="edit-description">What are you looking for?</label><textarea id="edit-description" name="description" maxlength="2000" rows="4" required placeholder="I build apps and want a portable Mac for coding, with plenty of memory…"></textarea><label for="edit-interests">Your interests <span>Separate with commas · up to 12</span></label><input id="edit-interests" name="interests" maxlength="960" placeholder="Coding, Photography, Running"><label for="edit-avoid">What would you rather see less of?</label><textarea id="edit-avoid" name="avoid" maxlength="1000" rows="2" placeholder="Gaming accessories, luxury upgrades…"></textarea><p id="form-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button button-quiet close-dialog">Cancel</button><button type="submit" class="button button-black">Save perspective <svg><use href="#i-check"/></svg></button></div></form></dialog>
+<dialog id="how-dialog" aria-labelledby="how-title"><div class="dialog-heading"><h2 id="how-title">A layer of you.</h2><button class="icon-button close-dialog" aria-label="Close explanation"><svg><use href="#i-close"/></svg></button></div><p class="dialog-copy">Cloak brings your perspective to the actual Apple Store.</p><ol class="how-steps"><li><span>01</span><div><h3>Start with what matters.</h3><p>Choose a profile or describe your interests in your own words.</p></div></li><li><span>02</span><div><h3>Let the page come into focus.</h3><p>A local, open-weight MiniLM model compares the store’s product descriptions with your interests. Relevant cards get a subtle outline. Apple’s navigation, cards and shopping controls stay in place.</p></div></li><li><span>03</span><div><h3>Make it more you.</h3><p>Use More or Less to teach Cloak. Switch to Original whenever you want to restore the page.</p></div></li></ol><p class="fine-print">First use downloads model weights from Hugging Face. Browsing still connects to Apple. Personal preferences are stored locally. This independent prototype is not affiliated with Apple.</p></dialog>
+<dialog id="learning-dialog" aria-labelledby="learning-title"><div class="dialog-heading"><h2 id="learning-title">A little better, every time.</h2><button class="icon-button close-dialog" aria-label="Close learning history"><svg><use href="#i-close"/></svg></button></div><p class="dialog-copy">Feedback belongs to the currently selected profile.</p><div id="learning-list"></div><div class="dialog-actions"><button class="button button-quiet" id="clear-feedback">Reset this profile’s learning</button><button class="button button-black close-dialog">Done</button></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body></html>
