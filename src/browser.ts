@@ -5,6 +5,7 @@ import { installAppleCloak } from './adapters/apple.ts';
 import { installDomEngine } from './engine/dom.ts';
 import { installCloakControls } from './controls.ts';
 import { installAppleContent } from './adapters/apple-content.ts';
+import { cloakLogoDataUri } from './branding.ts';
 
 export class BrowserManager {
   context?: BrowserContext;
@@ -123,6 +124,7 @@ export class BrowserManager {
       });
       await page.evaluate(installDomEngine);
       await page.evaluate(isStore ? installAppleCloak : installAppleContent);
+      await page.evaluate(logo => { (window as any).__cloakLogo = logo; }, cloakLogoDataUri);
       await page.evaluate(installCloakControls);
     } else await page.evaluate(installCloak);
     const stories = await page.evaluate(() => (window as any).__cloak.extract()) as Story[];

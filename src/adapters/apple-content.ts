@@ -50,12 +50,13 @@ export function installAppleContent() {
   if (!transactional) {
     // Sibling cards can be reordered independently even when their parent section
     // is pinned. Exclude tab-linked slides, accordions, dot navigation and steps.
-    const candidates = Array.from(main.querySelectorAll<HTMLElement>('ul,[role="list"],.section-hero,.section-promo,[class*="as-imagegrid"],[class*="as-tile-wrapper"],.tiles,.cards,.grid'));
+    const candidates = Array.from(main.querySelectorAll<HTMLElement>('ul,[role="list"],.section-hero,.section-promo,[class*="as-imagegrid"],[class*="as-tile-wrapper"],.tiles,.cards'));
     candidates.forEach(parent => {
+      if (parent.matches('.section-hero') && parent.querySelector('h1')) return;
       if (parent.closest('nav,footer,ol,[role="tablist"],.tabnav-gallery,.media-gallery,.section-endless-entertainment-gallery,.accordion,[class*="Accordion"],.as-search')) return;
       if (/color|paddle|dotnav|tabnav|chapternav|ChapterNav|bento|media-gallery/i.test(parent.className)) return;
-      const nodes = Array.from(parent.children).filter((node): node is HTMLElement => node instanceof HTMLElement && !/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(node.tagName) && !!node.querySelector('a[href],button') && text(node).length > 4);
-      if (nodes.length < 2 || nodes.length > 24 || nodes.some(node => used.has(node) || node.querySelector('input,select,textarea,form') || node.matches('[role="tab"],[role="tabpanel"]'))) return;
+      const nodes = Array.from(parent.children).filter((node): node is HTMLElement => node instanceof HTMLElement && !/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(node.tagName) && !!node.querySelector('a[href],button,h2,h3,h4,img,picture,video') && (text(node).length > 4 || !!node.querySelector('img,picture,video')));
+      if (nodes.length < 2 || nodes.length > 24 || nodes.some(node => used.has(node) || node.querySelector('input,select,textarea,form,[role="tablist"],[role="tabpanel"],details,summary,[role="dialog"]') || node.matches('[role="tab"],[role="tabpanel"]'))) return;
       if (!nodes.every(node => node.tagName === nodes[0].tagName)) return;
       if (!nodes.some(node => node.querySelector('h2,h3,h4,img,picture'))) return;
       // Do not register both a card and its inner link lists.
@@ -95,11 +96,22 @@ export function installAppleContent() {
     const allItems = plan.sectionOrder.flatMap((id: string) => plan.itemOrders[id] || []);
     const operations = groups.map(group => ({ group: group.id, order: (group.type === 'sections' ? plan.sectionOrder : group.type === 'categories' ? plan.categoryOrder : allItems).filter((id: string) => group.ids.includes(id)) }));
     engine.capture([]); engine.apply(operations, []);
-    engine.present(plan.presentation, groups.filter(group => group.type === 'items').map(group => { const ids = allItems.filter((id: string) => group.ids.includes(id)); const nodes = ids.map((id: string) => records.get(id)!); return { nodes, parent: nodes[0].parentElement! }; }));
+    const layoutGroups = groups.filter(group => group.type === 'items').map(group => {
+      const ids: string[] = allItems.filter((id: string) => group.ids.includes(id)); const nodes: HTMLElement[] = ids.map((id: string) => records.get(id)!);
+      const parent = nodes[0].parentElement!;
+      const gallery = parent.closest<HTMLElement>('[class*="Gallery_gallery"],.scroll-gallery,.card-gallery');
+      return { nodes, parent, viewport: gallery ? parent.parentElement : undefined, root: gallery || parent, kind: nodes.some(node => node.querySelector('a[href*="/shop/"]')) ? 'products' : 'content' };
+    });
+    engine.present(plan.presentation, transactional ? [] : layoutGroups);
+    if (!transactional) {
+      const orderedSections = plan.sectionOrder.map((id: string) => records.get(id)).filter((node: HTMLElement | undefined) => node && sectionNodes.includes(node));
+      const heroes = Array.from(main.children).filter((node): node is HTMLElement => node instanceof HTMLElement && /section-hero/.test(node.className) && !node.querySelector('nav,[class*="ChapterNav"]'));
+      engine.layout(plan.presentation, { kind: 'content', main, sections: orderedSections, heroes, groups: layoutGroups });
+    }
     currentPlan = plan.id;
     window.dispatchEvent(new Event('resize'));
   }
   win.__cloakAdapter = { inventory, extract: () => items, apply, restore, find: (id: string) => records.get(id)?.scrollIntoView({ block: 'center', behavior: 'instant' }),
     stale: () => groups.some(group => group.ids.some(id => !records.get(id)?.isConnected)) || parentSnapshots.some(({ parent, tags, children }) => { const current = Array.from(parent.children).filter(child => tags.has(child.tagName) && !child.hasAttribute('data-cloak-disclosure')); return current.length !== children.length || current.some(child => !children.includes(child)); }),
-    diagnostics: () => ({ planId: currentPlan, mode: inventory.mode, groups: Object.fromEntries(groups.map(group => [group.id, physical(group.ids)])), connected: [...records.values()].every(node => node.isConnected), engine: engine.diagnostics() }) };
+    diagnostics: () => ({ planId: currentPlan, mode: inventory.mode, layout: main.getAttribute('data-cloak-layout') || '', grids: document.querySelectorAll('[data-cloak-grid]').length, groups: Object.fromEntries(groups.map(group => [group.id, physical(group.ids)])), connected: [...records.values()].every(node => node.isConnected), engine: engine.diagnostics() }) };
 }

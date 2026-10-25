@@ -8,3 +8,6 @@
 .segmented button{color:#5e5e65}
 .profile-bottom>span,.connection-label,.results-footer,.footer>a:last-child,.local-note p,.learning-stat small{font-size:10px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.button:hover{transform:none}}
+
+/* The supplied Cloak artwork stays on its original black background. */
+.brand img{display:block;aspect-ratio:1;border-radius:50%;background:#000;object-fit:contain;flex-shrink:0}.brand.small img{width:23px;height:23px}@media(max-width:760px){.brand img{width:29px;height:29px}}

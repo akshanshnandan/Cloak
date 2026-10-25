@@ -55,7 +55,12 @@ export function installAppleCloak() {
     }
     engine.capture(scrollers);
     engine.apply(operations, [{ id: `heading:${primarySectionId}`, text: plan.collection.title.replace(/[.!?]+$/, '') + '.' }, { id: `subheading:${primarySectionId}`, text: '\u00a0Selected for you.' }]);
-    engine.present(plan.presentation, sections.map(section => { const ordered = plan.itemOrders[section.id].map((id: string) => items.find(item => item.id === id)?.node).filter(Boolean); return { nodes: ordered, parent: ordered[0]?.parentElement }; }).filter(group => group.parent));
+    const layoutGroups = plan.sectionOrder.map((id: string) => sections.find(section => section.id === id)).filter(Boolean).map((section: any) => {
+      const nodes = plan.itemOrders[section.id].map((id: string) => items.find(item => item.id === id)?.node).filter(Boolean);
+      return { nodes, parent: nodes[0]?.parentElement, viewport: nodes[0]?.closest('.rf-cards-scroller-content'), root: nodes[0]?.closest('.rf-cards-scroller'), kind: section.id === primarySectionId ? 'products' : 'content' };
+    }).filter((group: any) => group.parent);
+    engine.present(plan.presentation, layoutGroups);
+    engine.layout(plan.presentation, { kind: 'store', main: nativeSections[0]?.parentElement || document.querySelector('main'), sections: plan.sectionOrder.map((id: string) => sections.find(section => section.id === id)?.node).filter(Boolean), groups: layoutGroups });
     currentPlan = plan.id; active = true;
     // DOM order is the personalization. Reset native scroll offsets so first really means first.
     const version = ++resetVersion;
@@ -64,7 +69,7 @@ export function installAppleCloak() {
   }
   function find(id: string) { const entry = items.find(item => item.id === id); entry?.node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); }
   win.__cloakAdapter = { inventory, extract: () => inventory.items, apply, restore, find, stale: () => sections.some(section => !section.node.isConnected) || nativeSections.reduce((count, node) => count + node.querySelectorAll('.rf-cards-scroller-itemview').length, 0) !== items.length || document.querySelectorAll('.rs-cardsshelf .rs-cards-shelf-mainheader').length !== sections.length,
-    diagnostics: () => ({ planId: currentPlan, sections: physicalOrder(sections), categories: physicalOrder(categories), itemOrders: Object.fromEntries(sections.map(section => [section.id, physicalOrder(items.filter(item => item.story.sectionId === section.id))])), connected: items.every(item => item.node.isConnected), engine: engine.diagnostics() }) };
+    diagnostics: () => ({ planId: currentPlan, layout: document.querySelector('[data-cloak-layout]')?.getAttribute('data-cloak-layout') || '', grids: document.querySelectorAll('[data-cloak-grid]').length, sections: physicalOrder(sections), categories: physicalOrder(categories), itemOrders: Object.fromEntries(sections.map(section => [section.id, physicalOrder(items.filter(item => item.story.sectionId === section.id))])), connected: items.every(item => item.node.isConnected), engine: engine.diagnostics() }) };
   document.addEventListener('click', event => {
     if (!active || event.composedPath().some(node => node instanceof HTMLElement && node.id === 'cloak-controls')) return;
     const target = event.target instanceof Element ? event.target.closest('.rf-cards-scroller-itemview') : null;
