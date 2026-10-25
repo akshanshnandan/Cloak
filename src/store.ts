@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Preferences } from './types.ts';
 
 export function defaults(): Preferences {
-  return { activeProfileId: 'engineer', enabled: true, profiles: [
+  return { activeProfileId: 'engineer', enabled: false, profiles: [
     { id: 'engineer', name: 'Engineering student', description: 'I study engineering and build software. I want a portable Mac laptop or desktop computer for programming, machine learning and research, with a powerful chip and plenty of memory. An iPad for university notes is useful too.', interests: ['Mac computers', 'Programming', 'Machine learning', 'Study tools'], avoid: 'Luxury phone upgrades, watch bands and smart home accessories.', feedback: [] },
     { id: 'lifestyle', name: 'Active lifestyle', description: 'I run, hike and train outdoors. I am interested in an Apple Watch for workouts, accurate heart rate monitoring and health tracking, wireless AirPods for music while running, and durable sports accessories with long battery life.', interests: ['Fitness watches', 'Health tracking', 'Running', 'Wireless headphones'], avoid: 'Desktop computers, professional video editing and programming hardware.', feedback: [] },
     { id: 'creative', name: 'Creative professional', description: 'I am a photographer and filmmaker. I care about professional iPhone cameras for shooting photos and video, a powerful Mac for video editing and graphic design, and an iPad with Apple Pencil for drawing.', interests: ['Photography', 'Video production', 'Drawing', 'Creative tools'], avoid: 'Fitness watches, home automation and basic office accessories.', feedback: [] },

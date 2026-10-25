@@ -20,7 +20,7 @@ export async function rankStories(model: Pick<SemanticModel, 'embed'>, stories: 
       score += 0.32 * f.value * similarity * weight * (f.strength ?? 1);
       if (similarity * weight > strongest && f.value === 1) { strongest = similarity * weight; learned = f.title; }
     });
-    const reason = strongest > 0.55 ? `Similar to a story you liked: ${learned}` : topics[0]?.match > 0.15 ? `Matches your interest in ${topics[0].topic.toLowerCase()}` : 'Based on your personal profile';
+    const reason = strongest > 0.55 ? `Similar to something you liked: ${learned}` : topics[0]?.match > 0.15 ? `Matches your interest in ${topics[0].topic.toLowerCase()}` : 'Based on your personal profile';
     return { ...story, score, reason, movement: 0 };
   }).sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex);
   return ranked.map((story, i) => ({ ...story, movement: story.originalIndex - i }));

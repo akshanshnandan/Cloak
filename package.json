@@ -6,8 +6,9 @@
   "description": "An open-source, local AI layer that personalizes real websites.",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/start.ts",
+    "start": "tsx src/start.ts",
+    "dashboard": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx tests/integration.ts",
@@ -20,6 +21,7 @@
     "playwright": "^1.56.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@types/express": "^5.0.3",
     "@types/node": "^22.18.0",
     "tsx": "^4.20.6",

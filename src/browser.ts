@@ -1,7 +1,7 @@
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import type { Story } from './types.ts';
 import { installCloak } from './inject.ts';
-import { installAppleCloak } from './apple.ts';
+import { installAppleCloak } from './adapters/apple.ts';
 
 export class BrowserManager {
   context?: BrowserContext;

@@ -138,3 +138,4 @@ const server = app.listen(port, '127.0.0.1', () => console.log(`\n  cloak · You
 void model.load().then(() => rerank()).catch(() => broadcast());
 async function shutdown() { clients.forEach(r => r.end()); await browser.close(); server.close(() => process.exit(0)); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
+export { browser, model, store, server, state };
