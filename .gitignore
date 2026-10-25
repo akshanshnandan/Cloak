@@ -1,0 +1,7 @@
+node_modules/
+.cache/
+data/
+work/
+test-results/
+*.log
+.env
