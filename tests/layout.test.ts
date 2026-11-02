@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium, type Page } from 'playwright';
+import { type Page } from 'playwright';
+import { launchChromium } from './browser.ts';
 import { installDomEngine } from '../src/engine/dom.ts';
 import { installAppleContent } from '../src/adapters/apple-content.ts';
 
@@ -47,7 +48,7 @@ const geometry = (page: Page) => page.locator('#cards > li').evaluateAll(nodes =
 }));
 
 test('native card grids visibly change geometry, retain handlers, and undo exactly', async () => {
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); await fixture(page);
     const native = await geometry(page);
@@ -89,7 +90,7 @@ test('native card grids visibly change geometry, retain handlers, and undo exact
 });
 
 test('generic discovery and drastic layouts preserve interactive form and tab groups', async () => {
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage();
     const interactive = ['<form><label>Memory <select><option>16 GB</option><option>32 GB</option></select></label></form>', '<div role="tablist"><button role="tab" aria-selected="true">Laptops</button></div><div role="tabpanel">MacBook Air</div>', '<details><summary>Specifications</summary>Details</details>'];

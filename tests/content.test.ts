@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { launchChromium } from './browser.ts';
 import { installDomEngine } from '../src/engine/dom.ts';
 import { installAppleContent } from '../src/adapters/apple-content.ts';
 
 test('discovered native groups preserve links, scripts, focus disclosure and exact original styles', async () => {
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage();
     await page.setContent(`<main><h1>Apple</h1><section><h2>Family</h2><ul>${Array.from({length:6},(_,i)=>`<li><h3>Device ${i}</h3><p style="font-size:16px">Family calls</p><a href="https://www.apple.com/ipad/">Explore ${i}</a></li>`).join('')}</ul></section><section><h2>Performance</h2><p>Development tools.</p><a href="https://www.apple.com/mac/">Explore Mac</a></section><ol><li>First step</li><li>Second step</li></ol></main>`);

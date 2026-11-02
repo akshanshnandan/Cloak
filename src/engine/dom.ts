@@ -225,6 +225,7 @@ export function installDomEngine() {
     } catch (error) { restore(); throw error; }
   }
   win.__cloakDom = { register, registerText, registerPager, capture, apply, restore, present, layout, clearPresentation,
+    release: () => { restore(); groups.forEach(group => group.slots.forEach(slot => slot.remove())); groups.clear(); texts.clear(); observers.forEach(observer => observer.disconnect()); observers.length = 0; scroll.clear(); },
     destroy: () => { restore(); media.disconnect(); abort.abort(); observers.forEach(observer => observer.disconnect()); },
     diagnostics: () => Object.fromEntries([...groups].map(([id, group]) => [id, group.ids.map((id, i) => ({ id, connected: group.nodes[i].isConnected, slot: group.slots[i].isConnected }))])) };
 }

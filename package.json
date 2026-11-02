@@ -6,6 +6,10 @@
   "description": "An open-source, local AI layer that personalizes real websites.",
   "license": "MIT",
   "scripts": {
+    "build": "npm run build:extension",
+    "build:extension": "node extension/src/build.mjs",
+    "fixture": "node extension/src/fixture-server.mjs",
+    "pretest": "npm run build:extension",
     "dev": "tsx watch src/start.ts",
     "start": "tsx src/start.ts",
     "dashboard": "tsx src/server.ts",
@@ -22,6 +26,7 @@
     "playwright": "^1.56.1"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "@axe-core/playwright": "^4.14.0",
     "@types/express": "^5.0.3",
     "@types/node": "^22.18.0",

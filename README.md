@@ -46,6 +46,20 @@ An immediate local semantic pass rearranges the page while Qwen finishes its dee
 
 You can create and name a profile, describe your own needs, set a budget, and override automatic reading size and choice density. There are no fixed layouts for individual profiles. All use the same inventory, local model, plan compiler and DOM engine.
 
+## Chrome extension (Phase 1)
+
+The MV3 extension keeps the existing Playwright and local AI demo intact. Install the project dependencies and build the bundled extension with <code>npm install</code> and <code>npm run build</code>.
+
+Open <code>chrome://extensions</code>, turn on **Developer mode**, select **Load unpacked**, and choose <code>extension/dist</code>. Click Cloak on an ordinary page, describe what you want to see first, then select **Personalize**. The included fixture is available at <code>http://127.0.0.1:4318</code> after running <code>npm run fixture</code>.
+
+**Original** restores the saved DOM order. **Cloaked** applies the saved preference, and the master switch restores the current tab when turned off. Preferences persist in <code>chrome.storage.local</code>, while each tab keeps its own in-memory DOM transaction.
+
+Cloak uses <code>activeTab</code>, <code>scripting</code> and <code>storage</code> permissions. It injects the isolated content script only after a popup action. Discovery accepts conservative repeated heading cards and top-level article sections, and skips groups containing forms, controls, navigation, tab panels, editable content or dialogs. Unsupported pages report why no safe group was found. This phase scores token overlap locally and does not call an AI model.
+
+Phase 1 discovery is limited to direct sibling groups with headings in the page light DOM. Shadow DOM, virtualized lists, and layouts without safe heading groups remain unsupported. If a site replaces registered nodes while Cloak is active, the extension asks you to reload rather than guess at restoration.
+
+Run type checks and unit tests with <code>npm run typecheck</code> and <code>npm test</code>. The test command builds the extension first. <code>npm run test:integration</code> and <code>npm run test:journeys</code> remain the existing live Apple checks.
+
 ## How it works
 
 ```text

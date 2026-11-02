@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { launchChromium } from './browser.ts';
 import { installDomEngine } from '../src/engine/dom.ts';
 
 test('native DOM transactions reorder existing nodes and restore exact markup and identity', async () => {
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage();
     await page.setContent('<main><section id="a"><h2>Native <em>heading</em></h2><div><a id="one" href="/one">One</a><a id="two" href="/two">Two</a></div></section><script type="application/json">{}</script><section id="b">B</section></main>');
