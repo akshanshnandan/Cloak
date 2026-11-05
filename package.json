@@ -9,6 +9,7 @@
     "build": "npm run build:extension",
     "build:extension": "node extension/src/build.mjs",
     "fixture": "node extension/src/fixture-server.mjs",
+    "companion": "tsx src/companion-start.ts",
     "pretest": "npm run build:extension",
     "dev": "tsx watch src/start.ts",
     "start": "tsx src/start.ts",

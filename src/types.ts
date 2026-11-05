@@ -6,7 +6,7 @@ export interface RankedStory extends Story { score: number; reason: string; move
 export interface ModelStatus { phase: 'idle' | 'loading' | 'ready' | 'error'; message: string; progress: number }
 export interface PageSection { id: string; title: string; description: string; itemIds: string[]; originalIndex: number }
 export interface PageCategory { id: string; title: string; url: string; originalIndex: number }
-export interface PageInventory { url: string; sections: PageSection[]; categories: PageCategory[]; items: Story[]; primarySectionId: string; mode?: 'store' | 'content' | 'transaction'; groups?: { id: string; type: 'sections' | 'items' | 'categories'; ids: string[] }[] }
+export interface PageInventory { url: string; title?: string; sections: PageSection[]; categories: PageCategory[]; items: Story[]; primarySectionId: string; mode?: 'store' | 'content' | 'transaction'; groups?: { id: string; type: 'sections' | 'items' | 'categories'; ids: string[] }[] }
 export type LayoutStrategy = 'guided' | 'compare' | 'immersive' | 'balanced';
 export interface IntentDecision { title: string; query: string; budget: number | null; products: number[]; sections: number[]; categories: number[]; reading?: 'standard' | 'larger'; density?: 'all' | 'focused'; layout?: LayoutStrategy }
 export interface PersonalizationPlan {

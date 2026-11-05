@@ -3,7 +3,9 @@
   "name": "Cloak - Personalize the web",
   "version": "0.1.0",
   "description": "Reorder safe native content on the current page around what matters to you.",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "scripting", "storage", "webNavigation"],
+  "host_permissions": ["http://127.0.0.1:4319/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Cloak", "default_popup": "popup.html" }
 }

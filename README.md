@@ -46,20 +46,27 @@ An immediate local semantic pass rearranges the page while Qwen finishes its dee
 
 You can create and name a profile, describe your own needs, set a budget, and override automatic reading size and choice density. There are no fixed layouts for individual profiles. All use the same inventory, local model, plan compiler and DOM engine.
 
-## Chrome extension (Phase 1)
+## Chrome extension
 
-The MV3 extension keeps the existing Playwright and local AI demo intact. Install the project dependencies and build the bundled extension with <code>npm install</code> and <code>npm run build</code>.
+The MV3 extension adapts supported ordinary websites and can use the same local Qwen3 and MiniLM models as the Apple demo. Install dependencies and build the bundled extension with `npm install` and `npm run build`. The generated extension is in `extension/dist`.
 
-Open <code>chrome://extensions</code>, turn on **Developer mode**, select **Load unpacked**, and choose <code>extension/dist</code>. Click Cloak on an ordinary page, describe what you want to see first, then select **Personalize**. The included fixture is available at <code>http://127.0.0.1:4318</code> after running <code>npm run fixture</code>.
+Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `extension/dist`. To enable AI mode, start the companion in a terminal with `npm run companion`; it listens on port 4319 and does not launch Playwright or another browser. Copy its one-time pairing code into the popup and select **Connect AI**. Allow Chrome's local network prompt if it appears. Keep the companion terminal open. First use may download the Qwen3 runtime/weights and MiniLM model locally. The included fixture is available at `http://127.0.0.1:4318` after `npm run fixture`.
 
-**Original** restores the saved DOM order. **Cloaked** applies the saved preference, and the master switch restores the current tab when turned off. Preferences persist in <code>chrome.storage.local</code>, while each tab keeps its own in-memory DOM transaction.
+**Original** restores the original order of the same native nodes. **Cloaked** applies the current preference. Turning the master switch off cancels pending work, prevents automatic changes, and restores Cloak's active tabs. Preferences persist in `chrome.storage.local`; DOM state is independent per tab. Cloak reports a reload requirement if a site replacement prevents exact restoration.
 
-Cloak uses <code>activeTab</code>, <code>scripting</code> and <code>storage</code> permissions. It injects the isolated content script only after a popup action. Discovery accepts conservative repeated heading cards and top-level article sections, and skips groups containing forms, controls, navigation, tab panels, editable content or dialogs. Unsupported pages report why no safe group was found. This phase scores token overlap locally and does not call an AI model.
+Cloak uses `activeTab`, `scripting`, `storage`, and `webNavigation` permissions. Auto-Personalize requests optional permission for the current origin only after the user enables it. The extension sends a bounded inventory of visible card headings, short descriptions, section labels, visible prices, and cleaned URLs to the local companion. Qwen3 selects relevant existing IDs; MiniLM semantically ranks items. The server validates the Qwen decision against the supplied inventory and returns ID-only orders. Before applying, the extension checks that the tab URL and inventory still match. The popup labels local AI and deterministic fallback modes separately.
 
-Phase 1 discovery is limited to direct sibling groups with headings in the page light DOM. Shadow DOM, virtualized lists, and layouts without safe heading groups remain unsupported. If a site replaces registered nodes while Cloak is active, the extension asks you to reload rather than guess at restoration.
+Discovery is limited to repeated direct-sibling groups with headings in the page light DOM. Cloak moves existing nodes while preserving handlers, links, images, text, and accessibility relationships. Generic pages currently receive ordering changes only. Shadow DOM, virtualized lists, private/authentication/financial pages, pages whose useful items lack headings, and layouts with no safe groups remain unchanged.
 
-Run type checks and unit tests with <code>npm run typecheck</code> and <code>npm test</code>. The test command builds the extension first. <code>npm run test:integration</code> and <code>npm run test:journeys</code> remain the existing live Apple checks.
+Run `npm run build`, `npm run typecheck`, and `npm test`. Tests cover pairing and authorization, bounded plans, prompt-injection data handling, shopping/news/docs fixtures, DOM reordering and restoration, repeated cycles, independent tabs, unsupported pages, and extension behavior. `npm run test:integration` and `npm run test:journeys` are the existing live Apple checks.
 
+### Auto-Personalize and privacy
+
+Auto-Personalize is **off by default**. Enable it for the current site in the popup; Chrome asks permission for that exact origin. Cloak stores enabled origins and your preference in `chrome.storage.local`, registers a content script only for enabled origins, and reuses the same inventory and reversible DOM path. Turn it off to stop future automatic changes and restore the current page. Full document loads and History API route changes are handled. Incognito access is not enabled.
+
+Website text and URLs are processed locally. The companion binds to `127.0.0.1`, does not enable website CORS access, requires an extension-origin pairing plus a one-time terminal code and bearer token, limits JSON size and inference concurrency, and returns identifiers rather than executable code or CSS. The extension ID is learned from the runtime origin and is not hardcoded. The token is stored in extension local storage; anyone with access to your browser profile or local account can access local extension data. DOM heuristics cannot identify every confidential interface, so do not enable Cloak on pages containing private information. No page content is sent to a cloud API. First-run model downloads contact Hugging Face and GitHub. Inference may be slow on first use; when the companion is disconnected or unavailable, the popup explicitly reports deterministic fallback.
+
+Supported pages have repeated visible, heading-bearing article, documentation, product, or search-result cards in the light DOM. The generic adapter changes native order only. Unsupported page structures, canvas interfaces, shadow-DOM content, and infinite or virtualized feeds stay unchanged.
 ## How it works
 
 ```text
