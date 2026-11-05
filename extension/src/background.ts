@@ -25,7 +25,14 @@ async function isTabActive(tabId: number) {
 }
 function cancel(tabId: number) { requests.get(tabId)?.controller.abort(); requests.delete(tabId); versions.set(tabId, (versions.get(tabId) || 0) + 1); }
 chrome.tabs.onRemoved.addListener((tabId: number) => { cancel(tabId); void setTabActive(tabId, false); });
-chrome.tabs.onUpdated.addListener((tabId: number, change: any) => { if (change.status === 'loading' || change.url) cancel(tabId); });
+chrome.tabs.onUpdated.addListener((tabId: number, change: any) => {
+  if (change.status === 'loading' || change.url) {
+    cancel(tabId);
+    // The old document is going away, so its DOM cannot be restored after
+    // navigation. Do not carry its active marker onto an unrelated document.
+    if (change.status === 'loading' || change.url) void setTabActive(tabId, false);
+  }
+});
 chrome.tabs.onActivated.addListener(({ tabId }: { tabId: number }) => { for (const pending of requests.keys()) if (pending !== tabId) cancel(pending); });
 chrome.webNavigation.onHistoryStateUpdated.addListener((details: any) => {
   if (details.frameId !== 0) return;

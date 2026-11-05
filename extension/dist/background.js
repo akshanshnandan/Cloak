@@ -37,7 +37,10 @@
     void setTabActive(tabId, false);
   });
   chrome.tabs.onUpdated.addListener((tabId, change) => {
-    if (change.status === "loading" || change.url) cancel(tabId);
+    if (change.status === "loading" || change.url) {
+      cancel(tabId);
+      if (change.status === "loading" || change.url) void setTabActive(tabId, false);
+    }
   });
   chrome.tabs.onActivated.addListener(({ tabId }) => {
     for (const pending of requests.keys()) if (pending !== tabId) cancel(pending);

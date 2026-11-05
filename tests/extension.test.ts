@@ -214,6 +214,7 @@ test('bundled background routes actions to the active tab and isolates tab state
   const registered: any[] = [];
   let modelAvailable = false, delayAi = false, completeAi: (() => void) | undefined, sentInventory: any;
   let activeTab = 41;
+  let currentUrl = `https://site-${activeTab}.test/page`;
   const chromeMock = {
     runtime: { onInstalled: { addListener: (fn: Function) => { handlers.installed = fn; } }, onMessage: { addListener: (fn: Function) => { handlers.message ||= fn; } } },
     storage: {
@@ -221,8 +222,8 @@ test('bundled background routes actions to the active tab and isolates tab state
       session: { get: async (key: string) => ({ [key]: saved.session[key] }), set: async (value: any) => Object.assign(saved.session, value) }
     },
     tabs: {
-      query: async () => [{ id: activeTab, url: `https://site-${activeTab}.test/page` }],
-      get: async (tabId: number) => ({ id: tabId, url: `https://site-${tabId}.test/page` }),
+      query: async () => [{ id: activeTab, url: currentUrl }],
+      get: async (tabId: number) => ({ id: tabId, url: currentUrl }),
       sendMessage: async (tabId: number, message: any) => {
         calls.push({ tabId, message });
         if (!injected.has(tabId)) throw new Error('No receiver');
@@ -233,7 +234,7 @@ test('bundled background routes actions to the active tab and isolates tab state
           message.type === 'restore' ? { status: 'original', groups: 1 } : { status: 'personalized', groups: 1 };
       },
       onRemoved: { addListener: (fn: Function) => { handlers.removed = fn; } },
-      onUpdated: { addListener: () => {} },
+      onUpdated: { addListener: (fn: Function) => { handlers.updated = fn; } },
       onActivated: { addListener: () => {} }
     },
     permissions: { contains: async () => true, remove: async () => true },
@@ -290,4 +291,11 @@ test('bundled background routes actions to the active tab and isolates tab state
   assert.equal(offStatus.active, false);
   assert.equal(offStatus.cloakEnabled, false);
   assert.deepEqual(Array.from(saved.session['cloak-active-tab-ids']), []);
+  const afterOff = await send({ action: 'personalize', preference: 'gardening' });
+  assert.equal(afterOff.status, 'personalized');
+  assert.deepEqual(Array.from(saved.session['cloak-active-tab-ids']), [41]);
+  currentUrl = 'https://unrelated.test/next-page';
+  handlers.updated(41, { status: 'loading', url: currentUrl });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(Array.from(saved.session['cloak-active-tab-ids']), [], 'navigation drops the old document active marker');
 });

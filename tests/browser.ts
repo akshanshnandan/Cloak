@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
 
-const installedChrome = process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined;
-export const executablePath = process.env.TEST_CHROME_PATH || (installedChrome && existsSync(installedChrome) ? installedChrome : undefined);
+const installedBrowsers = process.platform === 'win32'
+  ? ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe']
+  : [];
+export const executablePath = process.env.TEST_CHROME_PATH || installedBrowsers.find(existsSync);
 export const launchChromium = () => chromium.launch(executablePath ? { executablePath } : {});
