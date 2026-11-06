@@ -19,9 +19,7 @@ function safeUrl(value: unknown) {
   } catch { return ''; }
 }
 function validOrigin(req: express.Request, origin: string | undefined) {
-  // The browser may label chrome-extension → loopback as cross-site in Fetch
-  // Metadata. Origin is the decisive check here; a website cannot set it to an
-  // installed extension's chrome-extension origin.
+  // Pairing is accepted only from the real extension page, which supplies Origin.
   return !!origin && EXTENSION_ORIGIN.test(origin) && req.get('sec-fetch-mode') !== 'navigate';
 }
 function equalSecret(a: string, b: string) {
@@ -47,13 +45,14 @@ export function createCompanionApp(options: CompanionOptions): Express {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     const origin = req.get('origin') || '';
-    if (EXTENSION_ORIGIN.test(origin) && (origin === pairedOrigin || req.path === '/api/extension/pair')) {
+    if (process.env.CLOAK_TRACE_REQUESTS === '1') console.log(`[companion] ${req.method} ${req.path} origin=${origin || '(none)'} fetch=${req.get('sec-fetch-mode') || '(none)'}`);
+    if (EXTENSION_ORIGIN.test(origin) && (origin === pairedOrigin || req.path === '/api/extension/pair' || req.path === '/api/extension/pair-status')) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Cloak-Extension-Origin');
     }
-    if (req.method === 'OPTIONS') return EXTENSION_ORIGIN.test(origin) && (origin === pairedOrigin || req.path === '/api/extension/pair') ? res.sendStatus(204) : res.sendStatus(403);
+    if (req.method === 'OPTIONS') return EXTENSION_ORIGIN.test(origin) && (origin === pairedOrigin || req.path === '/api/extension/pair' || req.path === '/api/extension/pair-status') ? res.sendStatus(204) : res.sendStatus(403);
     next();
   });
   app.get('/api/extension/pair-status', (req, res) => {
@@ -70,7 +69,11 @@ export function createCompanionApp(options: CompanionOptions): Express {
   });
   const authorize: express.RequestHandler = (req, res, next) => {
     const origin = req.get('origin') || '';
-    if (!pairedOrigin || origin !== pairedOrigin || !validOrigin(req, origin)) return res.sendStatus(403);
+    const claimedOrigin = req.get('x-cloak-extension-origin') || '';
+    // MV3 service-worker fetches on Chromium may omit Origin. Those requests
+    // must carry the paired extension ID and the bearer token; browser page
+    // requests still need to present the exact paired Origin as well.
+    if (!pairedOrigin || claimedOrigin !== pairedOrigin || !EXTENSION_ORIGIN.test(claimedOrigin) || (origin && (origin !== pairedOrigin || !validOrigin(req, origin)))) return res.sendStatus(403);
     const match = /^Bearer ([a-f0-9]{64})$/.exec(req.get('authorization') || '');
     if (!match || !equalSecret(match[1], token)) return res.sendStatus(401);
     next();
@@ -89,7 +92,7 @@ export function createCompanionApp(options: CompanionOptions): Express {
       const body = req.body;
       const preference = cleanText(body?.preference, 500);
       const source = body?.inventory;
-      if (!preference || !source || !Array.isArray(source.groups) || !Array.isArray(source.items) || source.items.length < 2 || source.items.length > 40 || source.groups.length < 1 || source.groups.length > 20) return res.status(400).json({ error: 'Invalid bounded page inventory or preference.' });
+      if (!preference || !source || !Array.isArray(source.groups) || !Array.isArray(source.items) || source.items.length < 2 || source.items.length > 40 || source.groups.length < 1 || source.groups.length > 20) return res.status(400).json({ code: 'invalid_inventory', error: 'Unsupported webpage: the safe inventory is missing or outside the supported size.' });
       const ids = new Set<string>();
       const items: Story[] = source.items.map((item: any, index: number) => {
         const id = cleanText(item?.id, 80), title = cleanText(item?.title, 160), description = cleanText(item?.description, 500), sectionId = cleanText(item?.sectionId, 80);
@@ -122,7 +125,11 @@ export function createCompanionApp(options: CompanionOptions): Express {
       res.json({ inventoryUrl: inventory.url, sectionOrder, groupOrders, selectedIds: selected, source: { planner: PLANNER_MODEL, semantic: MODEL, cached: inference.cached }, generatedAt: inference.generatedAt });
     } catch (error) {
       if (abort.signal.aborted) return;
-      res.status(400).json({ error: cleanText((error as Error).message, 240) || 'Could not create a validated page plan.' });
+      const message = cleanText((error as Error).message, 240) || 'Could not create a validated page plan.';
+      const invalidInventory = /invalid item|invalid group|inventory relationships/i.test(message);
+      const invalidResponse = /couldn.t create a valid plan|validation:/i.test(message);
+      const modelFailure = planner.status.phase === 'error' || model.status.phase === 'error';
+      res.status(invalidInventory ? 400 : 502).json({ code: invalidInventory ? 'invalid_inventory' : invalidResponse ? 'invalid_model_response' : modelFailure ? 'model_failure' : 'inference_failure', error: message });
     } finally { active--; }
   });
   return app;

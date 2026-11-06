@@ -30,7 +30,7 @@ test('companion pairing authorizes one extension origin, requires its token, and
   t.after(() => server.close());
   await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address() as any, base = `http://127.0.0.1:${address.port}`;
-  const request = (url: string, init: RequestInit = {}, requestOrigin = origin) => fetch(base + url, { ...init, headers: { Origin: requestOrigin, ...(init.headers as any || {}) } });
+  const request = (url: string, init: RequestInit = {}, requestOrigin = origin) => fetch(base + url, { ...init, headers: { Origin: requestOrigin, 'X-Cloak-Extension-Origin': origin, ...(init.headers as any || {}) } });
   const denied = await request('/api/extension/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'ONE-TIME-42' }) }, 'https://attacker.example');
   assert.equal(denied.status, 403);
   const paired = await request('/api/extension/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'wrong' }) });
@@ -54,4 +54,17 @@ test('companion pairing authorizes one extension origin, requires its token, and
   const malformed = structuredClone(inventory); malformed.items[0].id = 'run-code';
   const rejected = await request('/api/extension/plan', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ preference: 'test', inventory: malformed }) });
   assert.equal(rejected.status, 400);
+
+  const restarted = createCompanionApp({ pairingCode: 'RESTART-CODE', planner, model }).listen(0, '127.0.0.1');
+  t.after(() => restarted.close());
+  await new Promise<void>(resolve => restarted.once('listening', resolve));
+  const restartedAddress = restarted.address() as any, restartedBase = `http://127.0.0.1:${restartedAddress.port}`;
+  const restartRequest = (url: string, init: RequestInit = {}, requestOrigin = origin) => fetch(restartedBase + url, { ...init, headers: { Origin: requestOrigin, 'X-Cloak-Extension-Origin': origin, ...(init.headers as any || {}) } });
+  const unpaired = await restartRequest('/api/extension/pair-status', {}, origin);
+  assert.equal((await unpaired.json() as any).paired, false, 'a companion restart forgets the old in-memory pairing');
+  assert.equal((await restartRequest('/api/extension/health', { headers: { Authorization: `Bearer ${token}` } })).status, 403, 'the old saved token requires re-pairing after companion restart');
+  const reconnected = await restartRequest('/api/extension/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'RESTART-CODE' }) });
+  assert.equal(reconnected.status, 200, 'the new one-time terminal code restores connection');
+  const freshToken = (await reconnected.json() as any).token;
+  assert.equal((await restartRequest('/api/extension/health', { headers: { Authorization: `Bearer ${freshToken}` } })).status, 200);
 });

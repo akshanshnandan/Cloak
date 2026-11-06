@@ -171,7 +171,7 @@ test('bundled popup persists the preference and sends actions to the background'
   const browser = await launchChromium();
   try {
     const page = await browser.newPage();
-    await page.setContent('<!doctype html><header><strong>cloak</strong></header><p id="site"></p><p id="ai"></p><input id="pairing"><button id="pair"></button><input id="auto" type="checkbox"><input id="enabled" type="checkbox"><button id="original"></button><button id="cloaked"></button><textarea id="preference"></textarea><button id="personalize"></button><p id="status" role="status"></p>');
+    await page.setContent('<!doctype html><header><strong>cloak</strong></header><p id="site"></p><p id="ai"></p><input id="pairing"><button id="pair"></button><input id="auto" type="checkbox"><input id="require-ai" type="checkbox"><input id="enabled" type="checkbox"><button id="original"></button><button id="cloaked"></button><textarea id="preference"></textarea><button id="personalize"></button><p id="status" role="status"></p>');
     await page.evaluate('window.__name = value => value');
     await page.evaluate(() => {
       const state = (window as any).__popupTestState = { preference: '', messages: [] as any[], permissions: [] as any[] };
@@ -200,6 +200,7 @@ test('bundled popup persists the preference and sends actions to the background'
     await page.locator('#original').click();
     assert.equal(await page.locator('#enabled').isChecked(), true, 'Original restores the page while leaving Cloak globally enabled');
     assert.match(await page.locator('#status').innerText(), /Original page restored/);
+    await page.waitForFunction(() => (window as any).__popupTestState.messages.some((message: any) => message.action === 'auto-status'));
     await page.locator('#auto').check();
     assert.deepEqual(await page.evaluate(() => (window as any).__popupTestState.permissions), [{ origins: ['https://fixture.test/*'] }]);
     assert.equal(await page.evaluate(() => (window as any).__popupTestState.messages.some((message: any) => message.action === 'auto-set' && message.enabled)), true);
@@ -212,13 +213,13 @@ test('bundled background routes actions to the active tab and isolates tab state
   const saved: Record<string, any> = { local: { preference: 'gardening' }, session: {} };
   const injected = new Set<number>(), calls: any[] = [];
   const registered: any[] = [];
-  let modelAvailable = false, delayAi = false, completeAi: (() => void) | undefined, sentInventory: any;
+  let modelAvailable = false, healthStatus = 200, healthPhase = 'ready', delayAi = false, completeAi: (() => void) | undefined, sentInventory: any;
   let activeTab = 41;
   let currentUrl = `https://site-${activeTab}.test/page`;
   const chromeMock = {
-    runtime: { onInstalled: { addListener: (fn: Function) => { handlers.installed = fn; } }, onMessage: { addListener: (fn: Function) => { handlers.message ||= fn; } } },
+    runtime: { id: 'abcdefghijklmnopabcdefghijklmnop', onInstalled: { addListener: (fn: Function) => { handlers.installed = fn; } }, onMessage: { addListener: (fn: Function) => { handlers.message ||= fn; } } },
     storage: {
-      local: { get: async (key: any) => typeof key === 'object' ? { preference: saved.local.preference, companionToken: saved.local.companionToken, cloakEnabled: saved.local.cloakEnabled } : { [key]: saved.local[key] }, set: async (value: any) => Object.assign(saved.local, value) },
+      local: { get: async (key: any) => typeof key === 'object' ? { preference: saved.local.preference, companionToken: saved.local.companionToken, cloakEnabled: saved.local.cloakEnabled, requireRealAi: saved.local.requireRealAi, autoSites: saved.local.autoSites } : { [key]: saved.local[key] }, set: async (value: any) => Object.assign(saved.local, value) },
       session: { get: async (key: string) => ({ [key]: saved.session[key] }), set: async (value: any) => Object.assign(saved.session, value) }
     },
     tabs: {
@@ -246,8 +247,9 @@ test('bundled background routes actions to the active tab and isolates tab state
     },
     webNavigation: { onHistoryStateUpdated: { addListener: () => {} } }
   };
-  runInNewContext(source, { chrome: chromeMock, URL, AbortController, AbortSignal, fetch: async (_url: string, init: any) => {
+  runInNewContext(source, { chrome: chromeMock, URL, AbortController, AbortSignal, fetch: async (url: string, init: any = {}) => {
     if (!modelAvailable) throw new Error('No companion configured in this test');
+    if (url.endsWith('/api/extension/health')) return { ok: healthStatus === 200, status: healthStatus, json: async () => ({ planner: { phase: healthPhase }, semantic: { phase: healthPhase } }) };
     const body = JSON.parse(init.body); assert.match(body.preference, /gardening/);
     if (delayAi) await new Promise<void>((resolve, reject) => { completeAi = resolve; init.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); });
     return { ok: true, json: async () => ({ inventoryUrl: sentInventory.url, groupOrders: { 'items-0': ['b', 'a'] }, selectedIds: ['b'], source: { planner: 'controlled', semantic: 'controlled' } }) };
@@ -266,6 +268,13 @@ test('bundled background routes actions to the active tab and isolates tab state
   const aiPersonalized = await send({ action: 'personalize' });
   assert.equal(aiPersonalized.mode, 'local-ai');
   assert.equal(calls.some(call => call.tabId === 41 && call.message.type === 'apply-plan' && call.message.plan.mode === 'local-ai'), true, 'validated local AI orders are sent to the content transformation path');
+  healthStatus = 401;
+  assert.equal((await send({ action: 'status' })).ai.code, 'authentication-expired');
+  healthStatus = 403;
+  assert.equal((await send({ action: 'status' })).ai.code, 'pairing-required');
+  healthStatus = 200; healthPhase = 'loading';
+  assert.equal((await send({ action: 'status' })).ai.code, 'model-loading');
+  healthPhase = 'ready';
   const autoOn = await send({ action: 'auto-set', enabled: true });
   assert.equal(autoOn.enabled, true);
   assert.deepEqual(Array.from(registered[0].matches), ['https://site-41.test/*']);
@@ -291,6 +300,13 @@ test('bundled background routes actions to the active tab and isolates tab state
   assert.equal(offStatus.active, false);
   assert.equal(offStatus.cloakEnabled, false);
   assert.deepEqual(Array.from(saved.session['cloak-active-tab-ids']), []);
+  saved.local.companionToken = '';
+  saved.local.requireRealAi = true;
+  const fallbackCalls = calls.filter(call => call.message.type === 'personalize').length;
+  const strictWithoutPairing = await send({ action: 'personalize', preference: 'gardening' });
+  assert.equal(strictWithoutPairing.ai.code, 'pairing-required');
+  assert.equal(calls.filter(call => call.message.type === 'personalize').length, fallbackCalls, 'developer verification never silently uses deterministic fallback');
+  saved.local.requireRealAi = false;
   const afterOff = await send({ action: 'personalize', preference: 'gardening' });
   assert.equal(afterOff.status, 'personalized');
   assert.deepEqual(Array.from(saved.session['cloak-active-tab-ids']), [41]);

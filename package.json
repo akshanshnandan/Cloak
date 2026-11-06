@@ -17,6 +17,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx tests/integration.ts",
+    "verify:ai": "tsx tests/real-ai.ts",
+    "verify:companion": "tsx tests/real-companion.ts",
+    "test:live-sites": "npm run build:extension && tsx tests/live-sites.ts",
+    "test:extension-e2e": "npm run build:extension && tsx tests/extension-e2e.ts",
     "test:journeys": "tsx tests/journeys.ts",
     "setup": "playwright install chromium",
     "warmup": "tsx src/warmup.ts"

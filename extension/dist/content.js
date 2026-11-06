@@ -520,7 +520,7 @@
         return;
       }
       if (message?.type === "cloak-auto-run") {
-        autoReady();
+        notifyAuto();
         sendResponse({ queued: true });
         return;
       }
@@ -538,15 +538,33 @@
     return false;
   });
   var lastAutoUrl = location.href;
+  var routeTimer = 0;
   var autoReady = () => {
     if (chrome.runtime.sendMessage) chrome.runtime.sendMessage({ type: "cloak-auto-ready" }).catch(() => {
     });
   };
   var notifyAuto = () => {
-    if (lastAutoUrl !== location.href) {
-      lastAutoUrl = location.href;
+    if (lastAutoUrl === location.href) return;
+    window.clearTimeout(routeTimer);
+    routeTimer = window.setTimeout(() => {
+      const nextUrl = location.href;
+      if (lastAutoUrl === nextUrl) return;
+      const generic = window.__cloakGeneric;
+      if (generic) {
+        try {
+          if (generic.status().active) generic.restore();
+          generic.dispose();
+          delete window.__cloakGeneric;
+        } catch (error) {
+          chrome.runtime.sendMessage({ type: "cloak-auto-error", error: error.message }).catch(() => {
+          });
+          lastAutoUrl = nextUrl;
+          return;
+        }
+      }
+      lastAutoUrl = nextUrl;
       autoReady();
-    }
+    }, 300);
   };
   window.addEventListener("popstate", notifyAuto);
   window.addEventListener("hashchange", notifyAuto);

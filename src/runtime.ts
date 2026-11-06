@@ -1,5 +1,5 @@
 import { createWriteStream, createReadStream } from 'node:fs';
-import { mkdir, stat, rename, access, readdir } from 'node:fs/promises';
+import { mkdir, stat, rename, access, readdir, unlink } from 'node:fs/promises';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createHash, randomBytes } from 'node:crypto';
@@ -16,7 +16,9 @@ const ARCHIVE_SHA = '21aacee44771431a4d13a66988e31a65207aefb9c74b9098b2100e597cb
 async function exists(file: string) { try { await access(file); return true; } catch { return false; } }
 async function checksum(file: string) { const hash = createHash('sha256'); for await (const chunk of createReadStream(file)) hash.update(chunk); return hash.digest('hex'); }
 async function download(url: string, file: string, sha: string, size: number, progress: (value: number) => void) {
-  if ((await stat(file).catch(() => null))?.size === size) return;
+  const existing = await stat(file).catch(() => null);
+  if (existing?.size === size && await checksum(file) === sha) return;
+  if (existing) await unlink(file).catch(() => {});
   await mkdir(path.dirname(file), { recursive: true });
   const response = await fetch(url);
   if (!response.ok || !response.body) throw new Error(`Download failed: ${response.status}`);
@@ -42,15 +44,16 @@ export class LlamaRuntime {
   private tail = '';
   private closed = false;
   async start(directory: string, changed: (message: string, progress: number) => void) {
+    const rootDirectory = path.resolve(directory);
     let executable = process.env.CLOAK_LLAMA_SERVER;
-    const runtimeDirectory = path.join(directory, 'runtime', BUILD);
-    const modelFile = process.env.CLOAK_GGUF_MODEL || path.join(directory, 'models', MODEL_FILE);
+    const runtimeDirectory = path.join(rootDirectory, 'runtime', BUILD);
+    const modelFile = process.env.CLOAK_GGUF_MODEL ? path.resolve(process.env.CLOAK_GGUF_MODEL) : path.join(rootDirectory, 'models', MODEL_FILE);
     if (!executable) {
       if (process.platform !== 'win32') throw new Error('Set CLOAK_LLAMA_SERVER to your local llama-server executable on this platform');
       await mkdir(runtimeDirectory, { recursive: true });
       executable = await findExecutable(runtimeDirectory);
       if (!executable) {
-        const archive = path.join(directory, 'runtime', `llama-${BUILD}-vulkan.zip`);
+        const archive = path.join(rootDirectory, 'runtime', `llama-${BUILD}-vulkan.zip`);
         await download(`https://github.com/ggml-org/llama.cpp/releases/download/${BUILD}/llama-${BUILD}-bin-win-vulkan-x64.zip`, archive, ARCHIVE_SHA, 37039849, n => changed('Preparing local AI', n));
         // A fixed upstream build is verified before extraction or execution.
         if (await checksum(archive) !== ARCHIVE_SHA) throw new Error('AI runtime checksum mismatch');
@@ -60,6 +63,7 @@ export class LlamaRuntime {
       }
     }
     if (!executable) throw new Error('The local AI runtime is missing');
+    executable = path.resolve(executable);
     if (!process.env.CLOAK_GGUF_MODEL) await download(`https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/${MODEL_FILE}`, modelFile, MODEL_SHA, MODEL_SIZE, n => changed('Downloading local AI', n));
     if (this.closed) throw new Error('Local AI startup was cancelled');
     changed('Starting local AI', 100);

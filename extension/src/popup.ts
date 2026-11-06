@@ -5,15 +5,22 @@ const site = byId<HTMLElement>('site');
 const ai = byId<HTMLElement>('ai');
 const master = byId<HTMLInputElement>('enabled');
 const auto = byId<HTMLInputElement>('auto');
+const requireAi = byId<HTMLInputElement>('require-ai');
 let currentOrigin = '';
 const show = (message: string, error = false) => { status.textContent = message; status.classList.toggle('error', error); };
 async function action(actionName: string, text?: string) {
   show(actionName === 'personalize' || actionName === 'on' ? 'Local AI may load on first use · personalizing…' : 'Working…');
+  let polling: number | undefined;
+  if (actionName === 'personalize' || actionName === 'on') {
+    polling = window.setInterval(() => {
+      void chrome.runtime.sendMessage({ type: 'cloak-action', action: 'ai-status' }).then((value: any) => { if (value?.ai?.message) ai.textContent = value.ai.message; }).catch(() => {});
+    }, 2000);
+  }
   try {
     const result = await chrome.runtime.sendMessage({ type: 'cloak-action', action: actionName, preference: text });
     if (result?.site) site.textContent = result.site;
     if (result?.ai) ai.textContent = result.ai.message;
-    if (result?.error) { show(result.error, true); return; }
+    if (result?.error) { if (result.ai) ai.textContent = result.ai.message; show(result.error, true); return; }
     if (result?.status === 'personalized') {
       master.checked = true;
       show(`${result.message || 'Personalized.'} ${result.groups} safe group${result.groups === 1 ? '' : 's'}.`);
@@ -29,11 +36,13 @@ async function action(actionName: string, text?: string) {
     }
   } catch (error) {
     show(error instanceof Error ? error.message : 'Cloak could not communicate with this page.', true);
+  } finally {
+    if (polling !== undefined) window.clearInterval(polling);
   }
 }
 void (async () => {
   try {
-    const saved = await chrome.storage.local.get({ preference: '' }); preference.value = saved.preference; await action('status');
+    const saved = await chrome.storage.local.get({ preference: '', requireRealAi: false }); preference.value = saved.preference; requireAi.checked = saved.requireRealAi === true; await action('status');
     const state = await chrome.runtime.sendMessage({ type: 'cloak-action', action: 'auto-status' });
     currentOrigin = state?.origin || ''; auto.checked = !!state?.enabled;
   } catch (error) { site.textContent = 'Website unavailable'; show(error instanceof Error ? error.message : 'Cloak could not load its saved preferences.', true); }
@@ -46,6 +55,7 @@ master.addEventListener('change', async () => { if (master.checked) await action
 byId('cloaked').addEventListener('click', () => void action('on', preference.value));
 byId('personalize').addEventListener('click', () => void action('personalize', preference.value));
 byId('original').addEventListener('click', () => void action('original'));
+requireAi.addEventListener('change', () => { void chrome.storage.local.set({ requireRealAi: requireAi.checked }); show(requireAi.checked ? 'Verification mode is on: deterministic fallback will fail visibly.' : 'Verification mode is off.'); });
 byId('pair').addEventListener('click', async () => {
   show('Pairing local companion…');
   try {
@@ -54,7 +64,10 @@ byId('pair').addEventListener('click', async () => {
     const paired = await response.json();
     const result = await chrome.runtime.sendMessage({ type: 'cloak-store-token', token: paired.token, models: paired.models });
     if (result?.error) throw new Error(result.error);
-    ai.textContent = result.message; byId<HTMLInputElement>('pairing').value = ''; await action('status');
+    byId<HTMLInputElement>('pairing').value = '';
+    const connection = await chrome.runtime.sendMessage({ type: 'cloak-action', action: 'ai-status' });
+    ai.textContent = connection?.ai?.message || result.message;
+    show('Connected. Reconnecting replaces the saved token.');
   } catch (error) { show(error instanceof Error ? error.message : 'Could not reach the local companion. Allow local network access if Chrome asks.', true); }
 });
 auto.addEventListener('change', async () => {
