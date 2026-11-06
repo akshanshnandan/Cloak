@@ -94,41 +94,45 @@
     try {
       await ensureContent(tabId);
       if (!await stillCurrent()) throw new Error("Page changed before personalization could start.");
-      const snapshot = await chrome.tabs.sendMessage(tabId, { type: "inventory" });
-      const inventory = snapshot?.inventory;
-      if (!inventory?.items?.length) throw new Error("This page has no safe content to personalize.");
-      let mode = "fallback", plan, aiFailure = token ? null : { code: "pairing-required", message: "Connect or reconnect the local AI companion." };
-      if (token) {
-        try {
-          const key = JSON.stringify([url.split("#")[0], preference, inventory]);
-          plan = planCache.get(key);
-          if (!plan) {
-            const response = await fetch(`${companion}/api/extension/plan`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Cloak-Extension-Origin": `chrome-extension://${chrome.runtime.id}` }, body: JSON.stringify({ preference, inventory }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12e4)]), ...loopbackAddress });
-            if (!response.ok) {
-              const failure = await response.json().catch(() => ({}));
-              aiFailure = { code: failure.code || (response.status === 401 ? "authentication-expired" : response.status === 403 ? "pairing-required" : response.status === 429 ? "companion-busy" : "inference-failure"), message: failure.error || (response.status === 403 ? "The companion restarted or no longer recognizes this connection. Pair again with its current code." : response.status === 401 ? "The saved companion token is invalid. Reconnect with a new pairing code." : `Local AI request failed (${response.status}).`) };
+      let mode = "fallback", plan, inventory, aiFailure = token ? null : { code: "pairing-required", message: "Connect or reconnect the local AI companion." };
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const snapshot = await chrome.tabs.sendMessage(tabId, { type: "inventory" });
+        inventory = snapshot?.inventory;
+        if (!inventory?.items?.length) throw new Error("This page has no safe content to personalize.");
+        plan = void 0;
+        if (token) {
+          try {
+            const key = JSON.stringify([url.split("#")[0], preference, inventory]);
+            plan = planCache.get(key);
+            if (!plan) {
+              const response = await fetch(`${companion}/api/extension/plan`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Cloak-Extension-Origin": `chrome-extension://${chrome.runtime.id}` }, body: JSON.stringify({ preference, inventory }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12e4)]), ...loopbackAddress });
+              if (!response.ok) {
+                const failure = await response.json().catch(() => ({}));
+                aiFailure = { code: failure.code || (response.status === 401 ? "authentication-expired" : response.status === 403 ? "pairing-required" : response.status === 429 ? "companion-busy" : "inference-failure"), message: failure.error || (response.status === 403 ? "The companion restarted or no longer recognizes this connection. Pair again with its current code." : response.status === 401 ? "The saved companion token is invalid. Reconnect with a new pairing code." : `Local AI request failed (${response.status}).`) };
+                throw new Error(aiFailure.message);
+              }
+              plan = await response.json();
+              planCache.set(key, plan);
+              if (planCache.size > 20) planCache.delete(planCache.keys().next().value);
+            }
+            mode = "local-ai";
+          } catch (error) {
+            if (controller.signal.aborted) {
+              aiFailure = { code: "cancelled-stale", message: "Request cancelled because Cloak was switched off, preferences changed, or the page navigated." };
               throw new Error(aiFailure.message);
             }
-            plan = await response.json();
-            planCache.set(key, plan);
-            if (planCache.size > 20) planCache.delete(planCache.keys().next().value);
+            if (error?.name === "TimeoutError") aiFailure = { code: "request-timeout", message: "The local AI request timed out." };
+            else if (!aiFailure) aiFailure = { code: "companion-unavailable", message: "The local AI companion could not be reached." };
+            plan = void 0;
           }
-          mode = "local-ai";
-        } catch (error) {
-          if (controller.signal.aborted) {
-            aiFailure = { code: "cancelled-stale", message: "Request cancelled because Cloak was switched off, preferences changed, or the page navigated." };
-            throw new Error(aiFailure.message);
-          }
-          if (error?.name === "TimeoutError") aiFailure = { code: "request-timeout", message: "The local AI request timed out." };
-          else if (!aiFailure) aiFailure = { code: "companion-unavailable", message: "The local AI companion could not be reached." };
-          plan = void 0;
         }
-      }
-      if (!plan && requireRealAi) throw Object.assign(new Error(aiFailure?.message || "A real local AI plan is required, but none was returned."), { code: aiFailure?.code || "inference-failure" });
-      if (!await stillCurrent()) throw new Error("Page changed while AI was working. No plan was applied.");
-      if (plan) {
+        if (!plan && requireRealAi) throw Object.assign(new Error(aiFailure?.message || "A real local AI plan is required, but none was returned."), { code: aiFailure?.code || "inference-failure" });
+        if (!await stillCurrent()) throw new Error("Page changed while AI was working. No plan was applied.");
         const currentSnapshot = await chrome.tabs.sendMessage(tabId, { type: "inventory" });
-        if (JSON.stringify(currentSnapshot?.inventory) !== JSON.stringify(inventory) || !await stillCurrent()) throw new Error("Page content changed while AI was working. No plan was applied.");
+        if (JSON.stringify(currentSnapshot?.inventory) === JSON.stringify(inventory)) break;
+        if (attempt === 1) throw new Error("Page content kept changing while AI was working. No plan was applied; try again when the page is stable.");
+      }
+      if (plan) {
         const result2 = await chrome.tabs.sendMessage(tabId, { type: "apply-plan", plan: { ...plan, mode, inventoryUrl: inventory.url, source: plan.source || {} } });
         if (result2?.status === "no-change") return { ...result2, mode, ai: { mode, code: "no-change", message: "AI returned a plan, but it would not visibly change this page." }, message: "No visible change was needed for this preference." };
         if (result2?.error) throw Object.assign(new Error(result2.error), { code: "invalid-model-response" });

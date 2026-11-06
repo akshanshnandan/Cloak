@@ -214,6 +214,7 @@ test('bundled background routes actions to the active tab and isolates tab state
   const injected = new Set<number>(), calls: any[] = [];
   const registered: any[] = [];
   let modelAvailable = false, healthStatus = 200, healthPhase = 'ready', delayAi = false, completeAi: (() => void) | undefined, sentInventory: any;
+  let inventoryVersion = 0, mutateInventoryAfterPlan = false, planCalls = 0;
   let activeTab = 41;
   let currentUrl = `https://site-${activeTab}.test/page`;
   const chromeMock = {
@@ -228,7 +229,7 @@ test('bundled background routes actions to the active tab and isolates tab state
       sendMessage: async (tabId: number, message: any) => {
         calls.push({ tabId, message });
         if (!injected.has(tabId)) throw new Error('No receiver');
-        if (message.type === 'inventory') { const inventory = { url: `https://site-${tabId}.test/page`, groups: [{ id: 'items-0', ids: ['a', 'b'] }], items: [{ id: 'a' }, { id: 'b' }] }; sentInventory = inventory; return { inventory }; }
+        if (message.type === 'inventory') { const inventory = { url: `https://site-${tabId}.test/page`, version: inventoryVersion, groups: [{ id: 'items-0', ids: ['a', 'b'] }], items: [{ id: 'a', title: inventoryVersion ? 'Updated A' : 'A' }, { id: 'b', title: 'B' }] }; sentInventory = inventory; return { inventory }; }
         return message.type === 'apply-plan' ? { status: 'personalized', groups: 1 } :
           message.type === 'inventory' ? { inventory: sentInventory } :
           message.type === 'status' ? { active: !!(saved.session['cloak-active-tab-ids'] || []).includes(tabId), groups: 1 } :
@@ -250,9 +251,10 @@ test('bundled background routes actions to the active tab and isolates tab state
   runInNewContext(source, { chrome: chromeMock, URL, AbortController, AbortSignal, fetch: async (url: string, init: any = {}) => {
     if (!modelAvailable) throw new Error('No companion configured in this test');
     if (url.endsWith('/api/extension/health')) return { ok: healthStatus === 200, status: healthStatus, json: async () => ({ planner: { phase: healthPhase }, semantic: { phase: healthPhase } }) };
-    const body = JSON.parse(init.body); assert.match(body.preference, /gardening/);
+    const body = JSON.parse(init.body); assert.match(body.preference, /gardening/); planCalls++;
     if (delayAi) await new Promise<void>((resolve, reject) => { completeAi = resolve; init.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); });
-    return { ok: true, json: async () => ({ inventoryUrl: sentInventory.url, groupOrders: { 'items-0': ['b', 'a'] }, selectedIds: ['b'], source: { planner: 'controlled', semantic: 'controlled' } }) };
+    if (mutateInventoryAfterPlan) { mutateInventoryAfterPlan = false; inventoryVersion++; }
+    return { ok: true, json: async () => ({ inventoryUrl: body.inventory.url, groupOrders: { 'items-0': ['b', 'a'] }, selectedIds: ['b'], source: { planner: 'controlled', semantic: 'controlled' } }) };
   } });
   async function send(message: any) {
     return await new Promise<any>((resolve, reject) => {
@@ -268,6 +270,13 @@ test('bundled background routes actions to the active tab and isolates tab state
   const aiPersonalized = await send({ action: 'personalize' });
   assert.equal(aiPersonalized.mode, 'local-ai');
   assert.equal(calls.some(call => call.tabId === 41 && call.message.type === 'apply-plan' && call.message.plan.mode === 'local-ai'), true, 'validated local AI orders are sent to the content transformation path');
+  mutateInventoryAfterPlan = true;
+  const planCountBeforeDynamicPage = planCalls;
+  const dynamicPage = await send({ action: 'personalize', preference: 'gardening changed inventory' });
+  assert.equal(dynamicPage.status, 'personalized', 'one content replacement during inference triggers a bounded fresh plan');
+  assert.equal(dynamicPage.mode, 'local-ai');
+  assert.equal(planCalls - planCountBeforeDynamicPage, 2, 'the updated inventory receives a new local AI plan');
+  assert.equal(calls.filter(call => call.message.type === 'apply-plan').length, 2, 'only the fresh plan is applied after the page changes');
   healthStatus = 401;
   assert.equal((await send({ action: 'status' })).ai.code, 'authentication-expired');
   healthStatus = 403;
